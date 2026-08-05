@@ -113,6 +113,26 @@ draw_samples <- function(samples) {
     mtext( paste(samples,collapse=" ") , adj=0 )
 }
 
+draw_posterior_panel <- function(maxy, samples, x, a_old, b_old, a_new = NULL, b_new = NULL, col = NULL) {
+    pf(maxy)
+    if ( length(samples) > 0 ) draw_samples(samples)
+    lines( x , f(x,a_old,b_old) , lty=2 , lwd=2 , col=grau(0.5) )
+    if ( !is.null(a_new) && !is.null(b_new) ) {
+        lines( x , f(x,a_new,b_new) , lwd=5 , col=col )
+    }
+}
+
+record_frame <- function(nf, do_save) {
+    ani.record()
+    if ( do_save ) {
+        quartz.save( sprintf("frames/frame_%04d.png", 1000 + nf), type="png", device=dev.cur(), dpi=200 )
+    }
+    nf + 1
+}
+
+label_from_toss <- function(toss) if ( toss == 1 ) "W" else "L"
+color_from_toss <- function(toss) if ( toss == 1 ) 4 else 2
+
 kcols <- c( col.alpha(2,0.7) , col.alpha(4,0.7) )
 gcol <- 1
 glwd <- 0.5
@@ -120,8 +140,7 @@ glwd <- 0.5
 # set.seed(1619)
 
 # do all tosses first, so we can get max density for plot
-tm <- matrix(NA,n,3)
-for ( i in 1:n ) tm[i,] <- globe_toss(FALSE)
+tm <- t( replicate(n, globe_toss(FALSE)) )
 
 # compute max density
 a <- 1
@@ -137,15 +156,16 @@ nf <- 1
 ani.record(reset = TRUE)  # clear history before recording
 par(mfrow=c(1,2))
 
-for ( i in 1:n ) {
+for ( i in seq_len(n) ) {
 
     # sample an observation
     # 1 water
     # 0 land
-    #toss_list <- globe_toss(FALSE)
     toss_list <- tm[i,]
     toss <- toss_list[3]
-    label <- ifelse( toss==1 , "W" , "L" )
+    label <- label_from_toss(toss)
+    toss_col <- color_from_toss(toss)
+    toss_kcol <- ifelse(toss==1,kcols[2],kcols[1])
     samples_old <- samples
     samples <- c( samples , label )
 
@@ -163,50 +183,25 @@ for ( i in 1:n ) {
     # interpolate globe eye
     lonlat_old <- lonlat
     lonlat <- toss_list[1:2]
-    #latseq <- seq( from=latlon_old[1] , to=latlon[1] , length.out=mpts )
-    #lonseq <- seq( from=latlon_old[2] , to=latlon[2] , length.out=mpts )
     route <- make_route( lonlat_old[1:2] , lonlat[1:2] , steps=mpts )
-    #print(route)
 
     # spin globe
-    for ( j in 1:nrow(route) ) {
+    for ( j in seq_len(nrow(route)) ) {
         myglobeearth( eye=list( route[j,1] , route[j,2] ) , col=gcol , lwd=glwd )
-
-        pf(dmax+0.1)
-        if ( n > 1 ) draw_samples(samples_old)
-        lines( x , f(x,a_old,b_old) , lty=2 , lwd=2 , col=grau(0.5) )
-
-        ani.record()  # record the current frame
-        if ( do_save==TRUE ) {
-            quartz.save( concat("frames/frame_",1000+nf,".png") , type = "png", device = dev.cur(), dpi = 200 )
-            nf <- nf + 1
-        }
+        draw_posterior_panel(dmax+0.1, samples_old, x, a_old, b_old)
+        nf <- record_frame(nf, do_save)
     }
 
     # update posterior
     print(toss_list)
-    for ( j in 1:mpts ) {
+    for ( j in seq_len(mpts) ) {
 
         # plot globe
         myglobeearth( eye=list( toss_list[1] , toss_list[2] ) , col=gcol , lwd=glwd )
         
-        #points(0,0,lwd=2,col=ifelse(toss==1,4,2))
-        text(0,0,ifelse(toss==1,"W","L"),cex=0.8,col=ifelse(toss==1,4,2),font=2)
-
-        # plot posterior
-        pf(dmax+0.1)
-        draw_samples(samples)
-
-        lines( x , f(x,a_old,b_old) , lty=2 , lwd=2 , col=grau(0.5) )
-
-        lines( x , f(x,aseq[j],bseq[j]) , lwd=5 , col=ifelse(toss==1,kcols[2],kcols[1]) )
-        
-        ani.record()  # record the current frame
-        if ( do_save==TRUE ) {
-            quartz.save( concat("frames/frame_",1000+nf,".png") , type = "png", device = dev.cur(), dpi = 200 )
-            nf <- nf + 1
-        }
-        #dev.off()
+        text(0,0,label,cex=0.8,col=toss_col,font=2)
+        draw_posterior_panel(dmax+0.1, samples, x, a_old, b_old, aseq[j], bseq[j], toss_kcol)
+        nf <- record_frame(nf, do_save)
     }
     
 }#i
@@ -233,4 +228,3 @@ i <- PI(p,0.99)
 lo <- z$x[ which.max(z$x > i[1]) ]
 hi <- z$x[ which.min(z$x < i[2]) ]
 polygon(c(z$x[z$x >= lo & z$x <= hi], hi, lo), c(z$y[z$x >= lo & z$x <= hi], 0, 0), col=2 , border=1 )
-

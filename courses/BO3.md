@@ -1,0 +1,2572 @@
+# B03 — Correlated Features
+
+**Course:** Statistical Rethinking 2026  
+**Section:** B — Advanced  
+**Lecture:** B03 — Correlated Features  
+**Meeting date:** 23 January 2026  
+**Official reading listed by the course:** Chapter 13  
+**Closest second-edition correspondence:** Chapter 14, especially Sections 14.1–14.2  
+**Central question:** How can group-specific intercepts, slopes, treatment responses, and other features be modeled jointly so that their covariance becomes a source of partial pooling and prediction?
+
+> **Source note**
+>
+> This guide is grounded in the official 2026 course outline, the uploaded second edition of *Statistical Rethinking*, and the official script `14_GLMM_slopes_.r`.
+>
+> The principal script directly supports:
+>
+> - a correlated intercept-and-slope hierarchy for `UCBadmit`;
+> - a multivariate normal population of department features;
+> - separate population means, standard deviations, and a correlation matrix;
+> - an LKJ prior on correlations;
+> - sequential learning of the population covariance;
+> - two-dimensional shrinkage compared with no pooling;
+> - correlated four-feature actor and block hierarchies in the chimpanzee data;
+> - centered and non-centered covariance models;
+> - Cholesky-factor construction.
+>
+> The repository script `14_varying_slopes_bangladesh.R` is used as a supplementary worked example. It directly compares uncorrelated, centered-correlated, and non-centered-correlated district models for rural and urban contraceptive use.
+>
+> The course schedule assigns Chapter 13. In the uploaded second edition, the exact mathematical treatment of correlated varying intercepts and slopes is Chapter 14, *Adventures in Covariance*. Chapter 13 supplies the multilevel foundation, while Chapter 14 supplies the multivariate population prior, LKJ correlation prior, and varying-slope machinery.
+
+---
+
+## 1. Main thesis
+
+The central argument is:
+
+> **Group features often vary together, and modeling their covariance allows information to flow not only across groups but also across parameter types.**
+
+B01 pooled group intercepts:
+
+$$
+\alpha_j
+\sim
+\operatorname{Normal}
+\left(
+\bar{\alpha},
+\sigma_\alpha
+\right)
+$$
+
+B02 added separate populations of varying contrasts:
+
+$$
+\beta_j
+\sim
+\operatorname{Normal}
+\left(
+\bar{\beta},
+\sigma_\beta
+\right)
+$$
+
+B03 models the pair jointly:
+
+$$
+\begin{bmatrix}
+\alpha_j \\
+\beta_j
+\end{bmatrix}
+\sim
+\operatorname{MVNormal}
+\left(
+\begin{bmatrix}
+\bar{\alpha} \\
+\bar{\beta}
+\end{bmatrix},
+\mathbf{S}
+\right)
+$$
+
+The covariance matrix permits:
+
+$$
+\operatorname{Cov}
+\left(
+\alpha_j,
+\beta_j
+\right)
+\neq 0
+$$
+
+Learning a group intercept can therefore improve inference about its slope, and vice versa.
+
+The workflow is:
+
+$$
+\text{group-specific feature vector}
+\rightarrow
+\text{multivariate population model}
+\rightarrow
+\text{scale-correlation decomposition}
+\rightarrow
+\text{joint partial pooling}
+\rightarrow
+\text{new-group feature prediction}
+$$
+
+---
+
+## 2. Relationship to the book
+
+The lecture lies at the boundary between Chapters 13 and 14.
+
+| B03 topic | Closest second-edition counterpart | Role |
+|---|---|---|
+| Partial pooling and group populations | Chapter 13 | Foundation |
+| Varying slopes | Section 14.1 | Adds group-specific responses |
+| Joint intercept-slope population | Section 14.1 | Models correlated group features |
+| Covariance decomposition | Section 14.1 | Separates scales and correlations |
+| LKJ prior | Section 14.1 | Regularizes correlation matrices |
+| Advanced varying slopes | Section 14.2 | Larger feature vectors and computation |
+| Cholesky non-centering | Sections 14.1–14.2 | Efficient MCMC implementation |
+| Bangladesh district model | Chapter 14 practice | Interprets urban-rural covariance |
+| Chimpanzee four-feature hierarchies | 2026 script extension | Correlated treatment patterns by actor and block |
+
+The practical mapping is:
+
+$$
+\text{official B03 Chapter 13}
+=
+\text{Chapter 13 multilevel foundation}
++
+\text{Chapter 14 correlated varying features}
+$$
+
+---
+
+## 3. From varying intercepts to varying lines
+
+A varying-intercept model is:
+
+$$
+\mu_{ij}
+=
+\alpha_j
++
+\beta x_{ij}
+$$
+
+Every group has its own baseline, but all groups share one slope.
+
+A varying-intercept-and-slope model is:
+
+$$
+\mu_{ij}
+=
+\alpha_j
++
+\beta_jx_{ij}
+$$
+
+Now every group has its own line.
+
+The pair:
+
+$$
+\left(
+\alpha_j,
+\beta_j
+\right)
+$$
+
+is a vector of group features.
+
+The population model must describe:
+
+- average intercept;
+- average slope;
+- intercept heterogeneity;
+- slope heterogeneity;
+- intercept-slope correlation.
+
+---
+
+## 4. Why intercepts and slopes may covary
+
+Consider cafés with morning and afternoon waiting times.
+
+Let:
+
+- $\alpha_j$ be the morning wait at café $j$;
+- $\beta_j$ be the afternoon-minus-morning difference.
+
+A popular café may have a long morning wait and a large afternoon improvement:
+
+$$
+\alpha_j
+\text{ high},
+\qquad
+\beta_j
+\text{ strongly negative}
+$$
+
+An unpopular café may have a short morning wait and little afternoon change:
+
+$$
+\alpha_j
+\text{ low},
+\qquad
+\beta_j
+\text{ near zero}
+$$
+
+Across cafés:
+
+$$
+\operatorname{Cor}
+\left(
+\alpha_j,
+\beta_j
+\right)
+<0
+$$
+
+This covariance is population information. A morning observation from a new café can update an afternoon prediction before any afternoon observation is collected.
+
+---
+
+## 5. Varying slopes as interaction machines
+
+The model:
+
+$$
+\mu_{ij}
+=
+\alpha_j
++
+\beta_jx_{ij}
+$$
+
+is a regularized interaction between group identity and predictor $x$.
+
+Every group receives a different predictor response.
+
+The hierarchy estimates:
+
+$$
+\bar{\beta}
+$$
+
+and:
+
+$$
+\sigma_\beta
+$$
+
+while shrinking noisy group slopes toward the population pattern.
+
+When $\sigma_\beta$ is large, the distribution of slopes may be more informative than the average slope.
+
+---
+
+## 6. The multivariate population model
+
+For group $j$, define:
+
+$$
+\boldsymbol{\theta}_j
+=
+\begin{bmatrix}
+\alpha_j \\
+\beta_j
+\end{bmatrix}
+$$
+
+The population model is:
+
+$$
+\boldsymbol{\theta}_j
+\sim
+\operatorname{MVNormal}
+\left(
+\boldsymbol{\mu},
+\mathbf{S}
+\right)
+$$
+
+where:
+
+$$
+\boldsymbol{\mu}
+=
+\begin{bmatrix}
+\bar{\alpha} \\
+\bar{\beta}
+\end{bmatrix}
+$$
+
+and:
+
+$$
+\mathbf{S}
+=
+\begin{bmatrix}
+\sigma_\alpha^2
+&
+\rho\sigma_\alpha\sigma_\beta
+\\
+\rho\sigma_\alpha\sigma_\beta
+&
+\sigma_\beta^2
+\end{bmatrix}
+$$
+
+The diagonal entries are variances.
+
+The off-diagonal entries are covariances.
+
+---
+
+## 7. Correlation and covariance
+
+Covariance is:
+
+$$
+\operatorname{Cov}
+\left(
+\alpha,
+\beta
+\right)
+=
+\rho
+\sigma_\alpha
+\sigma_\beta
+$$
+
+Correlation is:
+
+$$
+\rho
+=
+\frac{
+\operatorname{Cov}
+\left(
+\alpha,
+\beta
+\right)
+}{
+\sigma_\alpha\sigma_\beta
+}
+$$
+
+Correlation is unitless and bounded:
+
+$$
+-1
+\leq
+\rho
+\leq
+1
+$$
+
+Covariance depends on the scales of both features.
+
+The model separates:
+
+- how much intercepts vary;
+- how much slopes vary;
+- how their variations align.
+
+---
+
+## 8. Scale-correlation decomposition
+
+Define:
+
+$$
+\mathbf{D}
+=
+\begin{bmatrix}
+\sigma_\alpha & 0 \\
+0 & \sigma_\beta
+\end{bmatrix}
+$$
+
+and:
+
+$$
+\mathbf{R}
+=
+\begin{bmatrix}
+1 & \rho \\
+\rho & 1
+\end{bmatrix}
+$$
+
+Then:
+
+$$
+\mathbf{S}
+=
+\mathbf{D}
+\mathbf{R}
+\mathbf{D}
+$$
+
+This separates marginal variation from dependence and guarantees a valid covariance matrix when the scales are positive and $\mathbf{R}$ is a valid correlation matrix.
+
+The official Stan code uses the equivalent operation:
+
+```stan
+quad_form_diag(Rho, Sigma)
+```
+
+---
+
+## 9. Why a multivariate Gaussian?
+
+A multivariate Gaussian is characterized by:
+
+- a mean vector;
+- marginal variances;
+- covariances.
+
+It is also a maximum-entropy choice when these moments are the only constraints.
+
+But it remains an assumption.
+
+It can be inappropriate when group features are:
+
+- multimodal;
+- heavy-tailed;
+- strongly skewed;
+- divided into latent classes;
+- structurally bounded.
+
+Thin Gaussian tails may over-shrink genuinely exceptional groups.
+
+---
+
+## 10. The `UCBadmit` correlated-feature model
+
+The official model uses:
+
+- $A_i$: admitted count;
+- $N_i$: applications;
+- $D_i$: department;
+- $F_i$: female-category indicator.
+
+The likelihood is:
+
+$$
+A_i
+\sim
+\operatorname{Binomial}
+\left(
+N_i,
+p_i
+\right)
+$$
+
+The linear predictor is:
+
+$$
+\operatorname{logit}(p_i)
+=
+\bar{a}
++
+a_{D_i}
++
+\left(
+\bar{b}
++
+b_{D_i}
+\right)
+F_i
+$$
+
+Here:
+
+- $\bar{a}$ is the population baseline log odds;
+- $a_d$ is department $d$'s baseline deviation;
+- $\bar{b}$ is the population-average female-minus-male contrast;
+- $b_d$ is department $d$'s contrast deviation.
+
+---
+
+## 11. Department feature vectors
+
+For department $d$:
+
+$$
+\boldsymbol{u}_d
+=
+\begin{bmatrix}
+a_d \\
+b_d
+\end{bmatrix}
+$$
+
+The hierarchy is:
+
+$$
+\boldsymbol{u}_d
+\sim
+\operatorname{MVNormal}
+\left(
+\begin{bmatrix}
+0 \\
+0
+\end{bmatrix},
+\mathbf{S}
+\right)
+$$
+
+The total department-specific features are:
+
+$$
+\alpha_d
+=
+\bar{a}+a_d
+$$
+
+$$
+\beta_d
+=
+\bar{b}+b_d
+$$
+
+The model separates population means from department deviations.
+
+---
+
+## 12. Population interpretation in admissions
+
+$\bar{a}$ describes the average department baseline on the log-odds scale.
+
+$\bar{b}$ describes the average department category contrast.
+
+$\sigma_a$ measures heterogeneity in department selectivity.
+
+$\sigma_b$ measures heterogeneity in department-specific contrasts.
+
+$\rho_{ab}$ asks:
+
+> Do departments with higher baseline admission log odds tend to have larger or smaller female-minus-male contrasts?
+
+The sign cannot be interpreted without checking the reference category and predictor coding.
+
+---
+
+## 13. Probability-scale department contrasts
+
+The reference-category admission probability is:
+
+$$
+p_{M,d}
+=
+\operatorname{logit}^{-1}
+\left(
+\bar{a}+a_d
+\right)
+$$
+
+The female-category probability is:
+
+$$
+p_{F,d}
+=
+\operatorname{logit}^{-1}
+\left(
+\bar{a}+a_d+
+\bar{b}+b_d
+\right)
+$$
+
+The probability difference is:
+
+$$
+\Delta_d
+=
+p_{F,d}-p_{M,d}
+$$
+
+The correlation between logit intercepts and slopes is not identical to a correlation between baseline probabilities and probability differences.
+
+---
+
+## 14. Joint population ellipses
+
+The official animation plots the population distribution in the plane:
+
+$$
+\left(
+\text{department baseline},
+\text{department contrast}
+\right)
+$$
+
+A positive correlation tilts the ellipse upward.
+
+A negative correlation tilts it downward.
+
+Zero correlation produces an axis-aligned ellipse.
+
+The ellipse summarizes:
+
+- population location;
+- marginal spread;
+- direction of covariation.
+
+---
+
+## 15. Sequential learning of covariance
+
+The script simulates departments with exaggerated covariance and reveals observations sequentially.
+
+As information arrives:
+
+- department posteriors contract;
+- population scales update;
+- correlation updates;
+- the population ellipse rotates;
+- partially observed departments borrow information from the emerging population geometry.
+
+One group can weakly identify its own line.
+
+A population correlation requires variation across several groups.
+
+---
+
+## 16. Number of groups versus observations per group
+
+Two information dimensions matter.
+
+### Within-group observations
+
+These identify each group's intercept and slope.
+
+### Number of groups
+
+These identify:
+
+$$
+\bar{\alpha},
+\bar{\beta},
+\sigma_\alpha,
+\sigma_\beta,
+\rho
+$$
+
+Thousands of observations in two groups do not strongly identify a population correlation across groups.
+
+Many groups are required to learn the population geometry.
+
+---
+
+## 17. Two-dimensional shrinkage
+
+With independent hierarchies, intercept and slope shrink separately.
+
+With correlated features, shrinkage occurs toward the joint population ellipse.
+
+If the population has negative intercept-slope correlation, a group with a high intercept is pooled toward a more negative slope than it would receive under an independence model.
+
+Shrinkage is directional.
+
+The hierarchy borrows information across parameter types.
+
+---
+
+## 18. Partial pooling versus no pooling
+
+The official script compares:
+
+### Partial-pooling covariance model
+
+$$
+\boldsymbol{u}_d
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{S}
+\right)
+$$
+
+### No-pooling model
+
+$$
+a_d
+\sim
+\operatorname{Normal}(0,1)
+$$
+
+$$
+b_d
+\sim
+\operatorname{Normal}(0,1)
+$$
+
+with no learned covariance.
+
+As sample size grows, estimates approach one another.
+
+With little data, partial pooling moves estimates more strongly toward the joint population distribution.
+
+---
+
+## 19. Cross-feature borrowing
+
+Suppose a department has many observations for the reference category but few for the female category.
+
+Its baseline can be estimated reasonably well.
+
+Its contrast is weakly identified.
+
+If baseline and contrast covary across departments, the baseline estimate informs the contrast.
+
+The reverse can also occur.
+
+This is information sharing that two independent one-dimensional hierarchies cannot provide.
+
+---
+
+## 20. The LKJ correlation prior
+
+The official model uses:
+
+$$
+\mathbf{R}
+\sim
+\operatorname{LKJCorr}(\eta)
+$$
+
+with:
+
+$$
+\eta=4
+$$
+
+For a two-dimensional matrix, this induces a prior on $\rho$.
+
+When:
+
+$$
+\eta=1
+$$
+
+the prior is uniform over valid correlation matrices.
+
+When:
+
+$$
+\eta>1
+$$
+
+the prior concentrates near the identity matrix and discourages extreme correlations.
+
+Thus $\eta=4$ regularizes toward:
+
+$$
+\rho=0
+$$
+
+---
+
+## 21. LKJ is a matrix prior
+
+For $K$ features, the number of unique pairwise correlations is:
+
+$$
+\frac{K(K-1)}{2}
+$$
+
+These correlations cannot be assigned independently because the full matrix must remain positive definite.
+
+The LKJ distribution places probability over valid correlation matrices as complete objects.
+
+It is not merely a collection of independent priors on pairwise correlations.
+
+---
+
+## 22. Correlation priors require scale priors
+
+The covariance is:
+
+$$
+\mathbf{S}
+=
+\mathbf{D}
+\mathbf{R}
+\mathbf{D}
+$$
+
+A large correlation can imply negligible covariance when one marginal scale is near zero.
+
+A moderate correlation can imply substantial covariance when both scales are large.
+
+The official model assigns positive priors to the marginal scales and an LKJ prior to the correlation matrix.
+
+Both parts must be calibrated through prior predictive simulation.
+
+---
+
+## 23. Correlation is weakly meaningful when a scale is near zero
+
+Suppose:
+
+$$
+\sigma_\beta
+\approx
+0
+$$
+
+Then group slopes barely vary.
+
+The covariance is:
+
+$$
+\rho
+\sigma_\alpha
+\sigma_\beta
+\approx
+0
+$$
+
+regardless of the numerical value of $\rho$.
+
+Posterior summaries should therefore report:
+
+- marginal scales;
+- correlation;
+- implied covariance;
+- predictive consequences.
+
+---
+
+## 24. Cholesky decomposition
+
+A correlation matrix can be decomposed as:
+
+$$
+\mathbf{R}
+=
+\mathbf{L}
+\mathbf{L}^{\mathsf T}
+$$
+
+where $\mathbf{L}$ is a lower-triangular Cholesky factor.
+
+For independent standard-normal scores:
+
+$$
+\boldsymbol{z}_j
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{I}
+\right)
+$$
+
+correlated effects can be constructed as:
+
+$$
+\boldsymbol{u}_j
+=
+\mathbf{D}
+\mathbf{L}
+\boldsymbol{z}_j
+$$
+
+Then:
+
+$$
+\operatorname{Cov}
+\left(
+\boldsymbol{u}_j
+\right)
+=
+\mathbf{D}
+\mathbf{R}
+\mathbf{D}
+$$
+
+---
+
+## 25. Two-dimensional Cholesky intuition
+
+Let:
+
+$$
+z_1,z_2
+\sim
+\operatorname{Normal}(0,1)
+$$
+
+Then a correlated pair can be generated as:
+
+$$
+u_1
+=
+\sigma_1z_1
+$$
+
+$$
+u_2
+=
+\sigma_2
+\left[
+\rho z_1
++
+\sqrt{1-\rho^2}z_2
+\right]
+$$
+
+The shared $z_1$ component creates correlation.
+
+The independent $z_2$ component preserves the required marginal variance.
+
+The official script demonstrates this construction.
+
+---
+
+## 26. Centered correlated hierarchy
+
+A centered hierarchy samples:
+
+$$
+\boldsymbol{u}_j
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{D}
+\mathbf{R}
+\mathbf{D}
+\right)
+$$
+
+directly.
+
+When scales approach zero, group vectors must lie in a narrow correlated region.
+
+This can create multivariate funnels and lead to:
+
+- divergences;
+- low effective sample size;
+- long trajectories;
+- strong posterior dependence.
+
+---
+
+## 27. Non-centered correlated hierarchy
+
+The non-centered form samples:
+
+$$
+\boldsymbol{z}_j
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{I}
+\right)
+$$
+
+and defines:
+
+$$
+\boldsymbol{u}_j
+=
+\mathbf{D}
+\mathbf{L}
+\boldsymbol{z}_j
+$$
+
+The official `rethinking` syntax uses:
+
+```r
+compose_noncentered(sigma, L_Rho, Z)
+```
+
+and reconstructs the ordinary correlation matrix with:
+
+```r
+Chol_to_Corr(L_Rho)
+```
+
+This often improves HMC geometry.
+
+---
+
+## 28. Why Stan samples the Cholesky factor
+
+Sampling a Cholesky factor:
+
+- enforces positive definiteness;
+- improves numerical stability;
+- supports efficient gradients;
+- integrates naturally with non-centering.
+
+The prior is written:
+
+$$
+\mathbf{L}
+\sim
+\operatorname{LKJCorrCholesky}(\eta)
+$$
+
+The ordinary matrix is generated afterward:
+
+$$
+\mathbf{R}
+=
+\mathbf{L}
+\mathbf{L}^{\mathsf T}
+$$
+
+Scientific interpretation remains on the correlation-matrix scale.
+
+---
+
+## 29. Coding changes the intercept-slope correlation
+
+Consider:
+
+$$
+\eta_{ij}
+=
+\alpha_j
++
+\beta_jx_{ij}
+$$
+
+Center the predictor at $c$:
+
+$$
+x_{ij}^{*}
+=
+x_{ij}-c
+$$
+
+Then:
+
+$$
+\eta_{ij}
+=
+\left(
+\alpha_j+c\beta_j
+\right)
++
+\beta_jx_{ij}^{*}
+$$
+
+The new intercept is:
+
+$$
+\alpha_j^{*}
+=
+\alpha_j+c\beta_j
+$$
+
+Therefore:
+
+$$
+\operatorname{Cov}
+\left(
+\alpha^{*},
+\beta
+\right)
+=
+\operatorname{Cov}
+\left(
+\alpha,
+\beta
+\right)
++
+c\operatorname{Var}
+\left(
+\beta
+\right)
+$$
+
+Intercept-slope correlation depends on the predictor reference point.
+
+It is not an invariant physical constant.
+
+---
+
+## 30. Meaningful zero points
+
+The intercept is the expected outcome when:
+
+$$
+x=0
+$$
+
+If zero is arbitrary or outside the data, the intercept-slope correlation is difficult to interpret.
+
+Centering at a meaningful value can make it describe:
+
+- baseline at average age;
+- outcome at treatment onset;
+- rural baseline;
+- morning wait;
+- response at a policy reference point.
+
+Every correlation interpretation should state the intercept definition.
+
+---
+
+## 31. Binary-predictor coding
+
+In the Bangladesh model:
+
+$$
+U_i=0
+$$
+
+means rural and:
+
+$$
+U_i=1
+$$
+
+means urban.
+
+The district model is:
+
+$$
+\operatorname{logit}(p_i)
+=
+a_{D_i}
++
+b_{D_i}U_i
+$$
+
+Thus:
+
+$$
+a_d
+$$
+
+is the rural logit.
+
+And:
+
+$$
+b_d
+$$
+
+is the urban-minus-rural log-odds contrast.
+
+The correlation asks whether districts with higher rural use tend to have larger or smaller urban-rural contrasts.
+
+Changing the reference category changes the interpretation.
+
+---
+
+## 32. Bangladesh data structure
+
+The supplementary script uses:
+
+- $C_i$: contraception use;
+- $D_i$: district;
+- $U_i$: urban indicator;
+- $A_i$: standardized age;
+- $K_i$: living-children category.
+
+The main worked model uses district and urban status:
+
+$$
+C_i
+\sim
+\operatorname{Bernoulli}(p_i)
+$$
+
+$$
+\operatorname{logit}(p_i)
+=
+a_{D_i}
++
+b_{D_i}U_i
+$$
+
+---
+
+## 33. Uncorrelated Bangladesh model
+
+The uncorrelated non-centered model is:
+
+$$
+a_d
+=
+\bar{a}
++
+\sigma_a z_{a,d}
+$$
+
+$$
+b_d
+=
+\bar{b}
++
+\sigma_b z_{b,d}
+$$
+
+with:
+
+$$
+z_{a,d},
+z_{b,d}
+\sim
+\operatorname{Normal}(0,1)
+$$
+
+Conditional on the hyperparameters:
+
+$$
+a_d
+\perp\!\!\!\perp
+b_d
+$$
+
+Rural baselines and urban contrasts are pooled separately.
+
+---
+
+## 34. Correlated Bangladesh model
+
+The correlated hierarchy is:
+
+$$
+\begin{bmatrix}
+a_d \\
+b_d
+\end{bmatrix}
+\sim
+\operatorname{MVNormal}
+\left(
+\begin{bmatrix}
+\bar{a} \\
+\bar{b}
+\end{bmatrix},
+\mathbf{S}
+\right)
+$$
+
+The script fits:
+
+- a centered covariance model;
+- a non-centered Cholesky model.
+
+The posterior correlation is compared with the LKJ prior to assess how much the district data update the dependence structure.
+
+---
+
+## 35. Rural and urban probabilities
+
+For district $d$:
+
+$$
+p_{R,d}
+=
+\operatorname{logit}^{-1}(a_d)
+$$
+
+$$
+p_{U,d}
+=
+\operatorname{logit}^{-1}(a_d+b_d)
+$$
+
+A useful plot places rural probability on one axis and urban probability on the other.
+
+The diagonal:
+
+$$
+p_{U,d}=p_{R,d}
+$$
+
+indicates no urban-rural difference.
+
+Points above the diagonal indicate higher urban use.
+
+Points below indicate higher rural use.
+
+---
+
+## 36. Logit-scale versus probability-scale patterns
+
+The modeled correlation is between:
+
+$$
+a_d
+$$
+
+and:
+
+$$
+b_d
+$$
+
+not directly between:
+
+$$
+p_{R,d}
+$$
+
+and:
+
+$$
+p_{U,d}
+$$
+
+The map:
+
+$$
+(a_d,b_d)
+\mapsto
+\left(
+\operatorname{logit}^{-1}(a_d),
+\operatorname{logit}^{-1}(a_d+b_d)
+\right)
+$$
+
+is nonlinear.
+
+Interpretation should therefore use posterior simulation and plots rather than translating $\rho$ mechanically into a probability-scale statement.
+
+---
+
+## 37. Correlated shrinkage in sparse districts
+
+With correlated pooling, a district's rural estimate informs its urban contrast and vice versa.
+
+A sparse urban cell can borrow information from:
+
+- the district's rural outcomes;
+- the population-average urban contrast;
+- the population intercept-slope covariance.
+
+This is particularly useful with unbalanced clustered data.
+
+It is also model-dependent: missing cells are inferred rather than directly observed.
+
+---
+
+## 38. Correlation is a population feature
+
+$\rho_{ab}$ describes variation across districts or departments:
+
+$$
+\operatorname{Cor}_{d}
+\left(
+a_d,b_d
+\right)
+$$
+
+It is not:
+
+- correlation among observations within one district;
+- correlation between the raw predictor and outcome;
+- posterior correlation between two uncertain coefficients in one group.
+
+The level of the correlation must always be named.
+
+---
+
+## 39. Correlation is not causation
+
+A correlation between group intercepts and slopes can arise from:
+
+- omitted group-level variables;
+- selection into groups;
+- measurement differences;
+- ceiling or floor effects;
+- predictor coding;
+- treatment assignment;
+- genuine effect modification;
+- model misspecification.
+
+The covariance is descriptive of the modeled group population.
+
+It can suggest scientific hypotheses.
+
+It does not establish their causes.
+
+---
+
+## 40. Omitted variables can create feature covariance
+
+Suppose an unobserved group characteristic $Z_j$ affects both baseline and response:
+
+$$
+Z_j
+\rightarrow
+\alpha_j
+$$
+
+$$
+Z_j
+\rightarrow
+\beta_j
+$$
+
+Then:
+
+$$
+\operatorname{Cov}
+\left(
+\alpha_j,
+\beta_j
+\right)
+\neq
+0
+$$
+
+even without a direct causal relation between intercept and slope.
+
+Adding a measured group predictor may reduce residual covariance.
+
+This is a model-development clue, not proof.
+
+---
+
+## 41. Ceiling and floor effects
+
+In a logistic model, a group near probability one has little room for a positive probability increase.
+
+A group near zero has little room for a negative decrease.
+
+This can create relationships between baseline probabilities and observed probability contrasts.
+
+Working on the logit scale helps, but does not eliminate every structural dependence.
+
+Probability-scale checks remain necessary.
+
+---
+
+## 42. Imbalance and missing cells
+
+A group observed at only one predictor level cannot identify both its intercept and slope from its own data.
+
+A correlated hierarchy can estimate the missing feature through population structure.
+
+This is a strength.
+
+It is also a source of assumption dependence.
+
+Groups with missing cells should be marked as hierarchy-driven predictions and assigned appropriately wide uncertainty.
+
+---
+
+## 43. New-group prediction
+
+For a new group:
+
+$$
+\boldsymbol{u}_{\mathrm{new}}^{(s)}
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{S}^{(s)}
+\right)
+$$
+
+The intercept and slope must be drawn jointly.
+
+Drawing them independently destroys the learned covariance and produces implausible new lines.
+
+The new-group prediction should include:
+
+- posterior uncertainty in population means;
+- uncertainty in scales and correlations;
+- group-to-group variation;
+- observation noise.
+
+---
+
+## 44. Conditional prediction of one feature from another
+
+Under a bivariate normal population:
+
+$$
+\mathbb{E}
+\left[
+\beta_j
+\mid
+\alpha_j
+\right]
+=
+\bar{\beta}
++
+\rho
+\frac{
+\sigma_\beta
+}{
+\sigma_\alpha
+}
+\left(
+\alpha_j-\bar{\alpha}
+\right)
+$$
+
+and:
+
+$$
+\operatorname{Var}
+\left(
+\beta_j
+\mid
+\alpha_j
+\right)
+=
+\sigma_\beta^2
+\left(
+1-\rho^2
+\right)
+$$
+
+When $|\rho|$ is large, knowing the intercept narrows the slope distribution substantially.
+
+When $\rho=0$, the intercept provides no information about the slope.
+
+---
+
+## 45. The chimpanzee four-feature hierarchy
+
+For observation $i$:
+
+$$
+P_i
+\sim
+\operatorname{Bernoulli}(p_i)
+$$
+
+$$
+\operatorname{logit}(p_i)
+=
+\bar{a}_{A_i}
++
+a_{A_i,T_i}
++
+\bar{b}_{B_i}
++
+b_{B_i,T_i}
+$$
+
+where:
+
+- $A_i$ indexes actor;
+- $B_i$ indexes block;
+- $T_i$ indexes four treatment conditions.
+
+Each actor has a four-feature treatment vector:
+
+$$
+\boldsymbol{a}_A
+=
+\begin{bmatrix}
+a_{A,1} \\
+a_{A,2} \\
+a_{A,3} \\
+a_{A,4}
+\end{bmatrix}
+$$
+
+Each block has a corresponding vector:
+
+$$
+\boldsymbol{b}_B
+=
+\begin{bmatrix}
+b_{B,1} \\
+b_{B,2} \\
+b_{B,3} \\
+b_{B,4}
+\end{bmatrix}
+$$
+
+---
+
+## 46. Actor covariance matrix
+
+The actor vector follows:
+
+$$
+\boldsymbol{a}_A
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{S}_A
+\right)
+$$
+
+with:
+
+$$
+\mathbf{S}_A
+=
+\mathbf{D}_A
+\mathbf{R}_A
+\mathbf{D}_A
+$$
+
+$\mathbf{R}_A$ is four-by-four and contains six unique correlations.
+
+These correlations describe whether actors with strong responses in one treatment condition tend to respond strongly or weakly in another.
+
+---
+
+## 47. Block covariance matrix
+
+Likewise:
+
+$$
+\boldsymbol{b}_B
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{S}_B
+\right)
+$$
+
+with:
+
+$$
+\mathbf{S}_B
+=
+\mathbf{D}_B
+\mathbf{R}_B
+\mathbf{D}_B
+$$
+
+This captures covariance among four treatment-condition deviations across blocks.
+
+The covariance can reflect procedural or temporal block patterns, but does not identify their cause.
+
+---
+
+## 48. Actor and block baselines
+
+The script includes separate baseline families:
+
+$$
+\bar{a}_A
+\sim
+\operatorname{Normal}(0,\tau_A)
+$$
+
+$$
+\bar{b}_B
+\sim
+\operatorname{Normal}(0,\tau_B)
+$$
+
+The correlated treatment vectors are zero-centered deviations around those baselines.
+
+This avoids estimating unrestricted means for several additive families that would otherwise be redundant.
+
+---
+
+## 49. Correlation matrices grow quickly
+
+For $K$ features, the number of unique correlations is:
+
+$$
+\frac{K(K-1)}{2}
+$$
+
+For:
+
+$$
+K=4
+$$
+
+there are six correlations per matrix.
+
+The chimpanzee model estimates:
+
+- six actor-feature correlations;
+- six block-feature correlations.
+
+With only seven actors and six blocks, these correlations are difficult to identify precisely and are strongly regularized by the LKJ prior.
+
+---
+
+## 50. Non-centered chimpanzee covariance model
+
+The official non-centered form uses independent standardized matrices and constructs correlated features with:
+
+```r
+compose_noncentered(sigma_A, L_Rho_A, zA)
+```
+
+and:
+
+```r
+compose_noncentered(sigma_B, L_Rho_B, zB)
+```
+
+The Cholesky factors receive:
+
+$$
+\mathbf{L}_{R_A}
+\sim
+\operatorname{LKJCorrCholesky}(4)
+$$
+
+$$
+\mathbf{L}_{R_B}
+\sim
+\operatorname{LKJCorrCholesky}(4)
+$$
+
+The ordinary correlation matrices are produced as generated quantities.
+
+---
+
+## 51. ESS comparison
+
+The official script compares effective sample sizes between centered and non-centered covariance models.
+
+The comparison includes:
+
+- baselines;
+- treatment features;
+- marginal scales;
+- correlation parameters.
+
+Some parameters may favor centering and others non-centering.
+
+The overall judgment should use:
+
+- divergences;
+- minimum bulk and tail ESS;
+- $\widehat{R}$;
+- runtime;
+- stability of scientific contrasts.
+
+---
+
+## 52. Component plots versus full predictions
+
+For actor $i$ and treatment $j$, the script plots:
+
+$$
+\operatorname{logit}^{-1}
+\left(
+\bar{a}_i+a_{i,j}
+\right)
+$$
+
+For block $i$ and treatment $j$, it plots:
+
+$$
+\operatorname{logit}^{-1}
+\left(
+\bar{b}_i+b_{i,j}
+\right)
+$$
+
+These are component displays.
+
+A complete response probability for a specific actor, block, and treatment is:
+
+$$
+\operatorname{logit}^{-1}
+\left(
+\bar{a}_{A}
++a_{A,T}
++\bar{b}_{B}
++b_{B,T}
+\right)
+$$
+
+Component plots should not be mistaken for complete predictions.
+
+---
+
+## 53. Prior predictive checks
+
+A prior predictive workflow should simulate:
+
+1. marginal scales;
+2. correlation matrices;
+3. group feature vectors;
+4. outcome probabilities or expectations.
+
+For each prior draw:
+
+$$
+\mathbf{R}^{(s)}
+\sim
+\operatorname{LKJCorr}(\eta)
+$$
+
+$$
+\boldsymbol{u}_j^{(s)}
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{D}^{(s)}
+\mathbf{R}^{(s)}
+\mathbf{D}^{(s)}
+\right)
+$$
+
+Then inspect:
+
+- feature ellipses;
+- line families;
+- probability surfaces;
+- extreme group profiles;
+- new-group predictions.
+
+A moderate prior on correlations can combine with broad scales to imply implausibly extreme outcomes.
+
+---
+
+## 54. Posterior predictive checks
+
+For admissions, reproduce:
+
+- admitted counts by department and category;
+- department baselines;
+- department contrasts;
+- aggregate rates.
+
+For Bangladesh, reproduce:
+
+- rural-use rates;
+- urban-use rates;
+- district heterogeneity;
+- urban-rural patterns.
+
+For chimpanzees, reproduce:
+
+- actor-treatment response patterns;
+- block-treatment patterns;
+- actor and block heterogeneity.
+
+A model may estimate a correlation while failing to reproduce the joint group behavior that motivated it.
+
+---
+
+## 55. Prior-posterior correlation comparison
+
+The Bangladesh script overlays the posterior of:
+
+$$
+\rho_{ab}
+$$
+
+with the LKJ prior.
+
+If posterior and prior are similar, the data provide little information about correlation.
+
+If the posterior shifts and narrows, the group data meaningfully identify a dependence pattern.
+
+If the posterior is multimodal or boundary-heavy, the model may have weak identification or geometry problems.
+
+---
+
+## 56. Causal interpretation of varying slopes
+
+Suppose $\beta_j$ is intended as a causal treatment effect.
+
+The hierarchy:
+
+$$
+\begin{bmatrix}
+\alpha_j \\
+\beta_j
+\end{bmatrix}
+\sim
+\operatorname{MVNormal}
+\left(
+\boldsymbol{\mu},
+\mathbf{S}
+\right)
+$$
+
+does not identify $\beta_j$ causally.
+
+Identification still requires:
+
+- randomized treatment or valid adjustment;
+- positivity within relevant groups;
+- appropriate timing;
+- no bad controls;
+- a defined group-specific estimand.
+
+Correlated pooling can efficiently estimate biased slopes when treatment assignment is confounded.
+
+---
+
+## 57. Correlation can reflect assignment mechanisms
+
+High-baseline groups may receive treatment under different conditions.
+
+Then estimated slopes can covary with intercepts because of:
+
+- differential support;
+- unmeasured risk;
+- targeting policy;
+- measurement timing.
+
+A posterior intercept-slope correlation can therefore describe the assignment process rather than genuine effect modification.
+
+Treatment distributions by group should be examined before causal interpretation.
+
+---
+
+## 58. Within-group and between-group structure
+
+In clustered observational data, a single slope may mix:
+
+### Within-group association
+
+$$
+X_{ij}-\bar{X}_j
+$$
+
+### Between-group association
+
+$$
+\bar{X}_j
+$$
+
+A Mundlak-style decomposition is:
+
+$$
+Y_{ij}
+=
+\alpha_j
++
+\beta_W
+\left(
+X_{ij}-\bar{X}_j
+\right)
++
+\beta_B\bar{X}_j
++
+\varepsilon_{ij}
+$$
+
+This separates within- and between-group comparisons.
+
+A correlated varying-slope model captures heterogeneity, but does not perform this causal decomposition automatically.
+
+---
+
+## 59. Correlation depends on the estimand scale
+
+Group features may be defined as:
+
+- log-odds contrasts;
+- probability differences;
+- risk ratios;
+- expected count differences;
+- rate ratios;
+- causal effects.
+
+The correlation among these quantities need not agree.
+
+For example:
+
+$$
+\operatorname{Cor}
+\left(
+\alpha_j,
+\beta_j
+\right)
+$$
+
+differs from:
+
+$$
+\operatorname{Cor}
+\left(
+p_j(0),
+p_j(1)-p_j(0)
+\right)
+$$
+
+The reported correlation should correspond to the scientific scale of interest.
+
+---
+
+## 60. CRM application: baseline value and campaign uplift
+
+Let:
+
+- $\alpha_j$ be baseline purchase propensity for segment $j$;
+- $\beta_j$ be campaign uplift on the log-odds scale.
+
+Model:
+
+$$
+\operatorname{logit}(p_{ij})
+=
+\alpha_j
++
+\beta_jA_i
+$$
+
+with:
+
+$$
+\begin{bmatrix}
+\alpha_j \\
+\beta_j
+\end{bmatrix}
+\sim
+\operatorname{MVNormal}
+\left(
+\begin{bmatrix}
+\bar{\alpha} \\
+\bar{\beta}
+\end{bmatrix},
+\mathbf{S}
+\right)
+$$
+
+A negative correlation may indicate that high-baseline segments have less incremental uplift.
+
+A positive correlation may indicate that high-baseline segments respond more strongly.
+
+This is causal only under a valid campaign design.
+
+---
+
+## 61. CRM application: customer affinity and price sensitivity
+
+Let:
+
+- $\alpha_i$ be latent purchase affinity;
+- $\beta_i$ be price sensitivity.
+
+A model is:
+
+$$
+\operatorname{logit}(p_{it})
+=
+\alpha_i
++
+\beta_i\,\text{price}_{it}
+$$
+
+with a joint hierarchy for:
+
+$$
+(\alpha_i,\beta_i)
+$$
+
+Price must be centered meaningfully because the correlation depends on the price origin.
+
+Historical price assignment must also be modeled if prices are targeted or endogenous.
+
+---
+
+## 62. CRM application: correlated channel responses
+
+For customer segment $j$:
+
+$$
+\boldsymbol{\beta}_j
+=
+\begin{bmatrix}
+\beta_{j,\mathrm{email}} \\
+\beta_{j,\mathrm{SMS}} \\
+\beta_{j,\mathrm{push}} \\
+\beta_{j,\mathrm{call}}
+\end{bmatrix}
+$$
+
+Use:
+
+$$
+\boldsymbol{\beta}_j
+\sim
+\operatorname{MVNormal}
+\left(
+\boldsymbol{\bar{\beta}},
+\mathbf{S}_\beta
+\right)
+$$
+
+Sparse channel responses can borrow information from better-observed channels.
+
+This is analogous to the four-feature actor and block hierarchies in the chimpanzee model.
+
+---
+
+## 63. CausalOps implications
+
+| B03 concept | CausalOps implication |
+|---|---|
+| Group feature vector | `CorrelatedFeatureArtifact` |
+| Multivariate population prior | `MultivariateHierarchyArtifact` |
+| Marginal scales | Separate scale parameters per feature |
+| Correlation matrix | Versioned `CorrelationArtifact` |
+| LKJ prior | Explicit matrix-prior metadata |
+| Cholesky factor | Computational representation |
+| Predictor centering | Required interpretation metadata |
+| Directional shrinkage | Joint pooling diagnostic |
+| New-group simulation | Preserve joint feature draws |
+| Sparse feature cells | Hierarchy-driven prediction flag |
+| Correlation interpretation | State level, scale, and reference point |
+| Causal slope | Separate identification artifact |
+| Prior-posterior comparison | Weak-identification diagnostic |
+| High-dimensional covariance | Group-count sufficiency warning |
+
+### 63.1 Correlated hierarchy schema
+
+```yaml
+hierarchy_id: department_admission_features
+cluster: department
+features:
+  - name: baseline_log_odds
+    population_mean: admission_intercept_mean
+    population_sd: admission_intercept_sd
+  - name: female_minus_male_log_odds
+    population_mean: admission_contrast_mean
+    population_sd: admission_contrast_sd
+correlation:
+  matrix_parameter: department_feature_corr
+  prior:
+    family: lkj
+    eta: 4
+parameterization: noncentered_cholesky
+```
+
+### 63.2 Predictor-reference schema
+
+```yaml
+predictor: urban
+coding:
+  rural: 0
+  urban: 1
+intercept_interpretation: rural_log_odds
+slope_interpretation: urban_minus_rural_log_odds
+```
+
+### 63.3 Weak-identification warning
+
+```yaml
+correlation_diagnostic:
+  number_of_groups: 6
+  number_of_features: 4
+  unique_correlations: 6
+  prior_eta: 4
+  posterior_prior_overlap: high
+  status: weakly_identified
+```
+
+---
+
+## 64. Distinguishing several kinds of covariance
+
+CausalOps should distinguish:
+
+### Population covariance
+
+Dependence among group features across groups.
+
+### Posterior covariance
+
+Dependence among uncertain parameters inside the fitted posterior.
+
+### Observation correlation
+
+Dependence among repeated outcomes.
+
+### Causal dependence
+
+Mechanistic relations among variables.
+
+These are different objects.
+
+Every matrix should identify:
+
+- units;
+- level;
+- parameter scale;
+- conditioning set;
+- causal status.
+
+---
+
+## 65. Validation strategy
+
+Simulate:
+
+$$
+\boldsymbol{u}_j^{\mathrm{true}}
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{S}_{\mathrm{true}}
+\right)
+$$
+
+Then generate observations under known group lines.
+
+Compare:
+
+1. complete pooling;
+2. no pooling;
+3. independent varying intercepts and slopes;
+4. correlated varying features;
+5. misspecified heavy-tailed population;
+6. misspecified mixture population.
+
+Useful metrics include:
+
+### Feature recovery
+
+$$
+\operatorname{RMSE}_\alpha
+$$
+
+and:
+
+$$
+\operatorname{RMSE}_\beta
+$$
+
+### Correlation recovery
+
+$$
+\left|
+\widehat{\rho}
+-
+\rho_{\mathrm{true}}
+\right|
+$$
+
+### New-group prediction
+
+Evaluate complete lines or feature vectors for held-out groups.
+
+### Sparse-cell prediction
+
+Hide one condition in selected groups and assess reconstruction.
+
+---
+
+## 66. Common errors exposed by B03
+
+### Error 1: Fitting varying intercepts and slopes independently by default
+
+This discards potentially useful cross-feature information.
+
+### Error 2: Interpreting correlation without marginal scales
+
+Correlation alone does not determine predictive importance.
+
+### Error 3: Treating the LKJ parameter as a prior correlation
+
+It controls a distribution over valid matrices.
+
+### Error 4: Assigning independent priors to every pairwise correlation
+
+The resulting matrix may not be positive definite.
+
+### Error 5: Ignoring Cholesky parameterization
+
+Direct matrix sampling can be less stable and efficient.
+
+### Error 6: Forgetting that centering changes intercept-slope correlation
+
+The correlation depends on the predictor reference point.
+
+### Error 7: Interpreting a logit-scale correlation as a probability-scale correlation
+
+Nonlinear transformation changes the pattern.
+
+### Error 8: Treating group-feature correlation as within-group observation correlation
+
+The levels differ.
+
+### Error 9: Calling covariance causal
+
+It may reflect omitted variables, selection, coding, or scale effects.
+
+### Error 10: Estimating a large matrix from very few groups without caution
+
+The posterior may remain prior-dominated.
+
+### Error 11: Reporting correlation when one marginal scale is near zero
+
+The implied covariance may be negligible.
+
+### Error 12: Drawing new group features independently
+
+This destroys the learned population geometry.
+
+### Error 13: Ignoring missing treatment cells
+
+Some estimates may be inferred almost entirely through the hierarchy.
+
+### Error 14: Treating component plots as full predictions
+
+All additive terms must be combined.
+
+### Error 15: Believing correlated pooling solves confounding
+
+It regularizes estimates but does not identify causal effects.
+
+---
+
+## 67. Lecture takeaways
+
+1. Group-specific features can be modeled jointly rather than independently.
+2. A varying-slope model assigns each group its own predictor response.
+3. Varying slopes are regularized interactions.
+4. Intercepts and slopes may covary through shared group mechanisms.
+5. A multivariate Gaussian population models means, scales, and covariance.
+6. Covariance can be decomposed into marginal scales and a correlation matrix.
+7. Joint pooling allows information to flow across parameter types.
+8. Shrinkage occurs toward a population ellipse.
+9. Learning correlation requires several groups.
+10. Within-group observations and number of groups identify different components.
+11. The admissions model estimates correlated department baselines and category contrasts.
+12. Probability contrasts require inverse-link transformation.
+13. LKJ priors regularize valid correlation matrices.
+14. Larger $\eta$ values favor weaker correlations.
+15. Correlation is weakly meaningful when one marginal scale is near zero.
+16. Cholesky factors provide an efficient matrix representation.
+17. Non-centering constructs correlated effects from independent standardized scores.
+18. Predictor centering changes intercept-slope covariance.
+19. Binary reference coding changes the interpretation of correlation.
+20. The Bangladesh model correlates rural baseline use with the urban-rural contrast.
+21. Logit-scale correlation differs from probability-scale patterns.
+22. Correlated pooling is valuable in sparse or missing cells.
+23. The chimpanzee model estimates four-dimensional actor and block feature populations.
+24. High-dimensional covariance requires strong regularization when groups are few.
+25. New-group features must be simulated jointly.
+26. Feature correlation can suggest omitted variables but does not prove a mechanism.
+27. Causal varying slopes still require treatment identification.
+28. CausalOps should label correlation level, scale, reference point, and epistemic status.
+29. The official reading says Chapter 13, while the exact second-edition treatment is Chapter 14.
+
+---
+
+## 68. Review questions
+
+1. What does a correlated varying-slope model add beyond independent hierarchies?
+2. Why can learning an intercept improve inference about a slope?
+3. What is the group feature vector?
+4. How is the covariance matrix built from scales and correlations?
+5. What does the off-diagonal covariance equal?
+6. Why is the multivariate Gaussian convenient?
+7. What are the components of the `UCBadmit` predictor?
+8. What do $a_d$ and $b_d$ represent?
+9. How is the probability-scale department contrast computed?
+10. What does the population ellipse represent?
+11. Why are several groups required to estimate correlation?
+12. How does joint shrinkage differ from separate shrinkage?
+13. What does the LKJ prior regularize?
+14. What does $\eta=1$ imply?
+15. Why can a high correlation be unimportant when one scale is near zero?
+16. What is a Cholesky factor?
+17. How does multivariate non-centering work?
+18. Why does Stan use Cholesky-factor correlation parameters?
+19. How does centering $x$ change the intercept?
+20. How does it change covariance with the slope?
+21. What does the intercept mean in the Bangladesh model?
+22. What does the slope mean?
+23. Why is the modeled correlation not a rural-urban probability correlation?
+24. How does correlated pooling help sparse districts?
+25. What are the chimpanzee actor and block feature vectors?
+26. How many correlations exist in a four-by-four matrix?
+27. Why are these difficult to identify with few actors and blocks?
+28. Why are component probabilities not full response probabilities?
+29. What should a prior predictive simulation examine?
+30. What does strong posterior-prior overlap for $\rho$ imply?
+31. How should new group intercepts and slopes be simulated?
+32. Why is feature correlation not a causal conclusion?
+33. How can omitted group variables generate covariance?
+34. Why can targeted assignment distort slope covariance?
+35. What does a within-between decomposition separate?
+36. How would you model correlated campaign response across channels?
+37. Which metadata should CausalOps store for a correlation matrix?
+
+---
+
+## 69. Book reading guide
+
+### Official assigned reading
+
+- Chapter 13, according to the 2026 course schedule.
+
+### Closest second-edition reading
+
+- Chapter 14, *Adventures in Covariance*
+  - Section 14.1, *Varying slopes by construction*
+  - Section 14.2, *Advanced varying slopes*
+
+### Essential Chapter 13 foundation
+
+- Section 13.3, multiple cluster types;
+- Section 13.4, non-centered priors;
+- Section 13.5, new-cluster prediction.
+
+### Read before B03
+
+Focus on:
+
+- B01 adaptive priors and partial pooling;
+- B02 varying contrasts and cross-classification;
+- A08 HMC diagnostics;
+- covariance in multivariate Gaussian posteriors;
+- probability-scale versus logit-scale effects.
+
+### Revisit after B03
+
+Return to:
+
+- the café intercept-slope population;
+- covariance decomposition;
+- LKJ priors;
+- the admissions varying-slope example;
+- Cholesky non-centering;
+- Bangladesh practice problem 14H1.
+
+### Course-to-book translation
+
+$$
+\text{B03}
+=
+\text{Chapter 13 multilevel machinery}
++
+\text{Chapter 14 correlated varying features}
+$$
+
+---
+
+## 70. Official code guide
+
+### `14_GLMM_slopes_.r`
+
+This is the principal B03 script.
+
+#### Correlated `UCBadmit` hierarchy
+
+It fits:
+
+$$
+A_i
+\sim
+\operatorname{Binomial}
+\left(
+N_i,p_i
+\right)
+$$
+
+$$
+\operatorname{logit}(p_i)
+=
+\bar{a}
++a_{D_i}
++
+\left(
+\bar{b}
++b_{D_i}
+\right)
+F_i
+$$
+
+with:
+
+$$
+\begin{bmatrix}
+a_d \\
+b_d
+\end{bmatrix}
+\sim
+\operatorname{MVNormal}
+\left(
+0,
+\mathbf{D}
+\mathbf{R}
+\mathbf{D}
+\right)
+$$
+
+and:
+
+$$
+\mathbf{R}
+\sim
+\operatorname{LKJCorr}(4)
+$$
+
+#### Sequential covariance animation
+
+It updates the population ellipse and department posterior ellipses as observations arrive.
+
+#### Shrinkage animation
+
+It compares partial pooling with no pooling as the number of applications increases.
+
+#### Correlated chimpanzee features
+
+It fits four-dimensional correlated treatment vectors for actors and blocks, in centered and non-centered forms.
+
+#### Cholesky demonstration
+
+It constructs correlated Gaussian variables from independent standard-normal scores.
+
+### `14_varying_slopes_bangladesh.R`
+
+This supplementary script:
+
+- visualizes multivariate Gaussian ellipses;
+- samples LKJ prior correlation matrices;
+- fits uncorrelated and correlated district models;
+- compares centered and non-centered covariance parameterizations;
+- overlays posterior and prior correlations;
+- plots rural and urban district probabilities;
+- visualizes shrinkage in the rural-urban probability plane.
+
+Core model:
+
+$$
+C_i
+\sim
+\operatorname{Bernoulli}(p_i)
+$$
+
+$$
+\operatorname{logit}(p_i)
+=
+a_{D_i}
++
+b_{D_i}U_i
+$$
+
+with a joint district population for:
+
+$$
+(a_d,b_d)
+$$
+
+### Scope limitation
+
+The scripts estimate population covariance among varying features.
+
+They do not establish the causal origin of that covariance.
+
+Group-centering, fixed-effects comparisons, and treatment assignment require additional causal modeling.
+
+---
+
+## 71. Sources
+
+- Richard McElreath, *Statistical Rethinking: A Bayesian Course with Examples in R and Stan*, second edition, especially Chapters 13–14.
+- Official `stat_rethinking_2026` repository and B03 lecture listing.
+- Official script `14_GLMM_slopes_.r`.
+- Supplementary repository script `14_varying_slopes_bangladesh.R`.
+- The official schedule's Chapter 13 assignment, retained with an explicit second-edition Chapter 14 mapping.

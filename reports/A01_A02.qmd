@@ -1,0 +1,133 @@
+---
+title: "Statistical Rethinking 2026 — Pipeline A01–A02"
+subtitle: "Exact path counting, Bayesian updating, and predictive validation"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: load-targets
+library(targets)
+
+a01_input <- tar_read(a01_input)
+a01_hypotheses <- tar_read(a01_hypotheses)
+a01_summary <- tar_read(a01_summary)
+a02_input <- tar_read(a02_input)
+a02_grid_posterior <- tar_read(a02_grid_posterior)
+a02_exact_posterior <- tar_read(a02_exact_posterior)
+a02_exact_predictive <- tar_read(a02_exact_predictive)
+a02_grid_predictive <- tar_read(a02_grid_predictive)
+a02_predictive_simulation <- tar_read(a02_predictive_simulation)
+a02_summary <- tar_read(a02_summary)
+```
+
+# Pipeline contract
+
+This first pipeline increment separates five objects:
+
+1. validated input;
+2. a forward generative model;
+3. an exact or grid-based inferential calculation;
+4. an independent computational check;
+5. a report that reads cached targets instead of recalculating them.
+
+# A01 — Random Allocation Game
+
+The observed result is `r a01_input$claims` claims among `r a01_input$participants` participants.
+
+Under the fixed-identity interpretation, all participants flip a fair coin, honest participants claim only after heads, and dishonest participants always claim. If $H$ participants are honest, the number of compatible paths is:
+
+$$
+\binom{H}{N-K}2^{N-H}.
+$$
+
+```{r}
+#| label: a01-table
+a01_hypotheses
+```
+
+If everyone is honest, there are `r a01_summary$all_honest_ways` compatible paths. If five fixed, labeled participants are honest, there are `r a01_summary$five_honest_fixed_ways` paths. Counting honesty assignments as additional microstates gives `r format(a01_summary$five_honest_variable_ways, big.mark = ",")` paths.
+
+```{r}
+#| label: a01-path-plot
+#| fig-cap: "Compatible paths under two definitions of the hypothesis."
+old_par <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+plot(a01_hypotheses$honest, a01_hypotheses$fixed_ways,
+  type = "b", xlab = "Honest participants", ylab = "Compatible paths",
+  main = "Fixed identities")
+plot(a01_hypotheses$honest, a01_hypotheses$variable_ways,
+  type = "b", xlab = "Honest participants", ylab = "Compatible microstates",
+  main = "Variable identities")
+par(old_par)
+```
+
+The fixed path count is maximized at $H=$ `r paste(a01_summary$fixed_count_modes, collapse = " or ")`. Raw variable-identity counts are maximized at $H=$ `r paste(a01_summary$variable_count_modes, collapse = " or ")`.
+
+The latter counts include $\binom{N}{H}$ possible assignments of honest identities. Because this factor changes with $H$, raw counts are not a likelihood over $H$ unless that microstate weighting is the intended prior. After conditioning on a fixed value of $H$, the claim-count likelihood is maximized at $H=$ `r paste(a01_summary$likelihood_modes, collapse = " or ")`.
+
+> `r a01_summary$interpretation_note`
+
+# A02 — Globe tossing
+
+The data contain `r a02_input$water` water and `r a02_input$land` land observations. With a uniform $\operatorname{Beta}(1,1)$ prior, the exact posterior is:
+
+$$
+p\mid W,L \sim \operatorname{Beta}(4,12).
+$$
+
+Its mean is `r sprintf("%.3f", a02_summary$exact_mean)`. The grid approximation gives `r sprintf("%.3f", a02_summary$grid_mean)`.
+
+```{r}
+#| label: a02-posterior
+#| fig-cap: "Grid approximation to the posterior probability of water."
+plot(a02_grid_posterior$probability, a02_grid_posterior$posterior,
+  type = "l", lwd = 2, xlab = "Probability of water",
+  ylab = "Posterior mass")
+abline(v = a02_exact_posterior$mean, lty = 2)
+```
+
+## Posterior predictive distribution
+
+For five future tosses, integrating the binomial sampling distribution over the beta posterior produces a beta-binomial distribution.
+
+```{r}
+#| label: a02-predictive-table
+transform(a02_exact_predictive,
+  grid_probability = a02_grid_predictive$probability)
+```
+
+```{r}
+#| label: a02-predictive-plot
+#| fig-cap: "Exact and simulated posterior predictive probabilities for five future tosses."
+empirical <- tabulate(a02_predictive_simulation$future_water + 1L,
+  nbins = a02_input$future_tosses + 1L) / nrow(a02_predictive_simulation)
+barplot(rbind(a02_exact_predictive$probability, empirical), beside = TRUE,
+  names.arg = a02_exact_predictive$future_water,
+  col = c("steelblue", "orange"),
+  xlab = "Water outcomes in five future tosses", ylab = "Probability")
+legend("topright", legend = c("Exact beta-binomial", "Posterior simulation"),
+  fill = c("steelblue", "orange"), bty = "n")
+```
+
+The exact predictive mean is `r sprintf("%.3f", a02_summary$predictive_mean)` water observations out of five. The largest difference between the grid and exact predictive probabilities is `r format(a02_summary$maximum_grid_exact_difference, scientific = TRUE, digits = 3)`.
+
+# Validation status
+
+| Check | Status |
+|---|---|
+| Input contracts | Enforced before computation |
+| A01 analytic versus exhaustive enumeration | Tested for every $H=0,\ldots,10$ |
+| A01 likelihood normalization | Tested for every hypothesis |
+| A02 posterior normalization | Tested |
+| Grid posterior versus exact beta posterior | Tested |
+| Grid predictive versus exact beta-binomial | Tested |
+| Posterior simulation reproducibility | Tested with fixed seeds |
+| MCMC diagnostics | Not applicable: A01–A02 use exact/grid calculations |
+| External validation | Not applicable at this stage |
+| Prior sensitivity | Deferred to a later problem |

@@ -102,10 +102,46 @@ This course involves a lot of scripting. Students can engage with the material u
 
 For those who want to use the original R code examples in the print book, you need to install the `rethinking` R package. The code is all on github <https://github.com/rmcelreath/rethinking/> and there are additional details about the package there, including information about using the more-up-to-date `cmdstanr` instead of `rstan` as the underlying MCMC engine.
 
+## Reproducible R environment
+
+This repository includes an `renv.lock` file generated with R 4.5.1. From a fresh checkout, restore the project library with:
+
+```r
+install.packages("renv")
+renv::restore()
+```
+
+The lockfile includes the official GitHub versions of `rethinking` and `cmdstanr`, as well as the CRAN dependencies detected in the course scripts. On Linux systems that build `sf` from source, GDAL, GEOS, PROJ, and udunits development libraries may need to be installed first. For Ubuntu:
+
+```sh
+sudo apt-get install libgdal-dev libgeos-dev libproj-dev libudunits2-dev
+```
+
+`renv` restores the `cmdstanr` R package but does not install the CmdStan toolchain itself. If CmdStan is not already available, install the version used to test this project:
+
+```r
+cmdstanr::install_cmdstan(version = "2.36.0")
+```
+
+Check the restored environment with:
+
+```r
+renv::status()
+library(rethinking)
+cmdstanr::cmdstan_version()
+```
+
+The reproducible course pipeline currently covers A01 and A02. Run its unit tests and build all targets, including the Quarto report, with:
+
+```sh
+Rscript tests/testthat.R
+Rscript -e 'targets::tar_make()'
+```
+
+The generated report is written to `reports/A01_A02.html`. A second `tar_make()` should skip every target if no dependency changed.
+
 # Homework and solutions
 
 I will also post problem sets and solutions. Check the folders at the top of the repository.
-
-
 
 

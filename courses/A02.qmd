@@ -1,3 +1,20 @@
+---
+title: "A02 — Garden of Forking Data"
+subtitle: "Statistical Rethinking 2026"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    theme: cosmo
+execute:
+  eval: false
+knitr:
+  opts_chunk:
+    python.reticulate: false
+---
+
 # A02 — Garden of Forking Data
 
 **Course:** Statistical Rethinking 2026  
@@ -691,7 +708,7 @@ The normalized values $\widetilde{q}_k$ approximate the posterior probabilities 
 
 A basic R implementation is:
 
-```r
+```{r}
 p_grid <- seq(0, 1, length.out = 1000)
 prior <- rep(1, 1000)
 likelihood <- dbinom(6, size = 9, prob = p_grid)
@@ -803,7 +820,7 @@ $$
 
 Using grid approximation in R:
 
-```r
+```{r}
 samples <- sample(
   p_grid,
   prob = posterior,
@@ -1079,7 +1096,7 @@ $$
 
 A compact R version is:
 
-```r
+```{r}
 p_sim <- rbeta(10000, 7, 4)
 W_sim <- rbinom(10000, size = 9, prob = p_sim)
 ```
@@ -1690,7 +1707,7 @@ Multiplication compresses the step-by-step tree enumeration into a product. Norm
 | **Stan (C++ PPL)** | `p ~ beta(1,1); W ~ binomial(N, p);` | Declarative PPL blocks (`data`, `parameters`, `model`) compiled to C++ HMC/NUTS. |
 | **PyMC (Python PPL)** | `with pm.Model(): p = pm.Beta(...); w = pm.Binomial(..., observed=3)` | Context-manager DAG definition using PyTensor graphs and ArviZ InferenceData. |
 
-```r
+```{r}
 # R Code Demonstration: Multiplication as Compressed Path Counting
 grid <- seq(0, 1, length.out = 5)
 prior_paths <- c(1, 1, 1, 1, 1) # Uniform prior
@@ -1700,7 +1717,7 @@ posterior <- unnormalized_posterior / sum(unnormalized_posterior)
 print(data.frame(grid, prior_paths, likelihood_paths, unnormalized_posterior, posterior))
 ```
 
-```python
+```{python}
 # Python Code Demonstration
 import numpy as np
 
@@ -1717,7 +1734,7 @@ print("Unnormalized posterior:", unnormalized_posterior)
 print("Normalized posterior:  ", np.round(posterior, 4))
 ```
 
-```python
+```{python}
 # PyTorch Code Demonstration
 import torch
 
@@ -1730,7 +1747,7 @@ posterior = unnormalized_posterior / unnormalized_posterior.sum()
 print("PyTorch Posterior:", posterior)
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code Demonstration: Binomial Model (Compressed Path Counting)
 data {
   int<lower=0> N;  // Total trial count (e.g., 4)
@@ -1745,7 +1762,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration: Binomial Model (Compressed Path Counting)
 import pymc as pm
 
@@ -1823,7 +1840,7 @@ Using Beta-Binomial conjugacy:
 | **Stan (C++ PPL)** | `p ~ beta(1,1); W ~ binomial(9, p);` | Full MCMC sampling of posterior parameter $p$ with `generated quantities`. |
 | **PyMC (Python PPL)** | `with pm.Model(): p = pm.Beta("p",1,1); w = pm.Binomial("w",9,p,observed=6)` | NUTS MCMC sampling with automatic ArviZ summary extraction (`az.summary`). |
 
-```r
+```{r}
 # R Solution for Q5
 alpha_post <- 7; beta_post <- 4
 post_mean <- alpha_post / (alpha_post + beta_post) # 7/11 ≈ 0.6364
@@ -1831,7 +1848,7 @@ post_mode <- (alpha_post - 1) / (alpha_post + beta_post - 2) # 6/9 ≈ 0.6667
 cat(sprintf("Mean: %.4f, Mode: %.4f\n", post_mean, post_mode))
 ```
 
-```python
+```{python}
 # Python Solution for Q5
 alpha_post, beta_post = 7, 4
 post_mean = alpha_post / (alpha_post + beta_post)
@@ -1839,7 +1856,7 @@ post_mode = (alpha_post - 1) / (alpha_post + beta_post - 2)
 print(f"Mean: {post_mean:.4f}, Mode: {post_mode:.4f}")
 ```
 
-```python
+```{python}
 # PyTorch Solution for Q5
 import torch
 
@@ -1853,7 +1870,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Solution for Question 5: Globe Tossing (6 Water, 3 Land)
 data {
   int<lower=0> N; // 9 tosses
@@ -1871,7 +1888,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Solution for Question 5
 import pymc as pm
 import arviz as az
@@ -1925,7 +1942,7 @@ $$
 | **Stan (C++ PPL)** | `p_batch ~ beta(1,1); p_seq ~ beta(7,1); 0 ~ binomial(3, p_seq);` | Multi-parameter Stan model running batch and sequential likelihoods in parallel. |
 | **PyMC (Python PPL)** | `with seq_model: p_seq = pm.Beta("p_seq", 7.0, 1.0); w = pm.Binomial(3, p_seq, observed=0)` | Sequential conditioning using Phase 1 posterior as prior for Phase 2. |
 
-```r
+```{r}
 # R Demonstration: Sequential vs Batch
 # Start Beta(1,1). Observation 1: 6 W. Observation 2: 3 L.
 # Batch: Beta(1+6, 1+3) = Beta(7,4)
@@ -1933,7 +1950,7 @@ $$
 cat("Identical parameters: Beta(7,4)\n")
 ```
 
-```python
+```{python}
 # Python Demonstration
 import scipy.stats as stats
 
@@ -1944,7 +1961,7 @@ seq_post = stats.beta(7, 4)
 print("Max difference in PDF grid:", np.max(np.abs(batch_post.pdf(np.linspace(0,1,100)) - seq_post.pdf(np.linspace(0,1,100)))))
 ```
 
-```python
+```{python}
 # PyTorch Demonstration
 import torch
 
@@ -1958,7 +1975,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Demonstration: Sequential vs Batch Updating
 // Batch: Prior Beta(1,1) + Data (6 W, 3 L) -> Beta(7,4)
 // Sequential: Phase 1 posterior Beta(7,1) as Prior + Phase 2 Data (3 L) -> Beta(7,4)
@@ -1983,7 +2000,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Demonstration: Sequential vs Batch Updating
 import pymc as pm
 import arviz as az
@@ -2026,14 +2043,14 @@ This exponential explosion renders grid search completely infeasible for multi-p
 | **Stan (C++ PPL)** | `vector<lower=0, upper=1>[M] p; p ~ beta(2, 2);` | HMC/NUTS explores multi-dimensional continuous spaces without evaluating grids. |
 | **PyMC (Python PPL)** | `with high_dim_model: p = pm.Beta("p", 2.0, 2.0, shape=10)` | Vectorized NUTS sampling over 10D posterior space using PyTensor. |
 
-```r
+```{r}
 # R Code: Grid size growth
 M <- 1:10; K <- 100
 grid_sizes <- K^M
 data.frame(Parameters = M, GridPoints = grid_sizes)
 ```
 
-```python
+```{python}
 # Python Code
 M = np.arange(1, 11)
 grid_sizes = 100**M
@@ -2041,14 +2058,14 @@ for m, size in zip(M, grid_sizes):
   print(f"Params: {m:2d} -> Grid Points: {size:.1e}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 params = torch.arange(1, 11)
 grid_points = 100.0**params
 print("PyTorch Grid sizes for 1..10 params:", grid_points)
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Demonstration: High-Dimensional MCMC Sampling
 // Demonstrates how Hamiltonian Monte Carlo avoids grid explosion (K^M)
 data {
@@ -2062,7 +2079,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Demonstration: High-Dimensional MCMC Sampling
 import pymc as pm
 
@@ -2114,7 +2131,7 @@ $$
 | **Stan (C++ PPL)** | `generated quantities { real p_draw = p; }` | Extracts MCMC draws for external expected loss optimization. |
 | **PyMC (Python PPL)** | `p_draws = idata_loss.posterior["p"].values.flatten()` | ArviZ InferenceData posterior array extraction for expected loss minimization. |
 
-```r
+```{r}
 # R Code: Expected loss minimization for Beta(7,4)
 samples <- rbeta(1e5, 7, 4)
 d_grid <- seq(0, 1, length.out = 500)
@@ -2125,7 +2142,7 @@ cat("Optimal d under absolute loss (median):", d_grid[which.min(abs_loss)], "\n"
 cat("Optimal d under squared loss (mean):   ", d_grid[which.min(sq_loss)], "\n")
 ```
 
-```python
+```{python}
 # Python Code
 p_samples = np.random.beta(7, 4, size=100000)
 d_grid = np.linspace(0, 1, 500)
@@ -2136,7 +2153,7 @@ print(f"Optimal d (Absolute Loss): {d_grid[np.argmin(abs_loss)]:.4f}")
 print(f"Optimal d (Squared Loss):  {d_grid[np.argmin(sq_loss)]:.4f}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 beta_dist = torch.distributions.Beta(7.0, 4.0)
 p_samples = beta_dist.sample((100000,))
@@ -2153,7 +2170,7 @@ print(
 print(f"PyTorch d* (Squared Loss):  {d_grid[torch.argmin(sq_loss)].item():.4f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code Demonstration: Generated Quantities for Loss Evaluation
 data {
   int<lower=0> N; // 9
@@ -2172,7 +2189,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration: Expected Loss Minimization
 import pymc as pm
 import numpy as np
@@ -2212,7 +2229,7 @@ $$
 | **Stan (C++ PPL)** | `generated quantities { int W_pred = binomial_rng(N_pred, p); }` | Inline `rng` prediction inside Stan execution block integrating $p(\theta \mid D)$ and $p(\widetilde{Y} \mid \theta)$. |
 | **PyMC (Python PPL)** | `post_pred = pm.sample_posterior_predictive(idata)` | Post-processing graph execution sampling outcome nodes given posterior draws. |
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code Demonstration: Posterior Predictive Sampling
 // Propagates parameter uncertainty (p) and observation uncertainty (W_pred)
 data {
@@ -2233,7 +2250,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration: Posterior Predictive Sampling
 import pymc as pm
 
@@ -2273,7 +2290,7 @@ print("Posterior Predictive Samples shape:", post_pred.posterior_predictive["w_o
 | **Stan (C++ PPL)** | `generated quantities { int W_prior_pred = binomial_rng(N_tosses, p); }` | Prior predictive simulation generated before observing data. |
 | **PyMC (Python PPL)** | `prior_pred = pm.sample_prior_predictive()` vs `pm.sample_posterior_predictive()` | Explicit API functions for prior predictive (unconditioned) vs posterior predictive (conditioned). |
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code Demonstration: Prior Predictive vs Posterior Predictive Simulation
 data {
   int<lower=0> N_tosses; // 9
@@ -2290,7 +2307,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration: Prior Predictive vs Posterior Predictive
 import pymc as pm
 
@@ -2429,7 +2446,7 @@ where $\mathrm{B}(a,b) = \frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}$ is the Beta fun
 
 #### R Code Solution
 
-```r
+```{r}
 # ==============================================================================
 # Homework A02 - R Solution (Grid Approximation, Sampling & Prediction)
 # ==============================================================================
@@ -2471,7 +2488,7 @@ print(round(exact_probs_r, 5))
 
 #### Python Code Solution (NumPy / SciPy)
 
-```python
+```{python}
 # ==============================================================================
 # Homework A02 - Python Solution (NumPy & SciPy)
 # ==============================================================================
@@ -2524,7 +2541,7 @@ for k in range(6):
 
 #### PyTorch Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A02 - PyTorch Solution (Tensor-Based Bayesian Workflow)
 # ==============================================================================
@@ -2574,7 +2591,7 @@ for k in range(6):
 
 #### Stan Code Solution
 
-```stan
+```{stan, output.var="stan_model"}
 // ==============================================================================
 // Homework A02 - Stan Solution (Posterior & Posterior Predictive)
 // ==============================================================================
@@ -2600,7 +2617,7 @@ generated quantities {
 
 #### PyMC Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A02 - PyMC Solution (Complete MCMC & Predictive Workflow)
 # ==============================================================================

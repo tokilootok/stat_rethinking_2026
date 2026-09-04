@@ -3,5 +3,6 @@
 .RData
 .Ruserdata
 _targets/
-reports/*.html
-reports/*_files/
+*.html
+*_files/
+

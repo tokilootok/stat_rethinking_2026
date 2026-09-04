@@ -1,3 +1,20 @@
+---
+title: "A03 — Geocentric Models"
+subtitle: "Statistical Rethinking 2026"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    theme: cosmo
+execute:
+  eval: false
+knitr:
+  opts_chunk:
+    python.reticulate: false
+---
+
 # A03 — Geocentric Models
 
 **Course:** Statistical Rethinking 2026  
@@ -1221,7 +1238,7 @@ Thus, Ordinary Least Squares (OLS) is the Maximum Likelihood Estimator under ind
 | **Stan (C++ PPL)** | `y ~ normal(alpha + beta * x, sigma);` | Declarative log-density accumulation and gradient evaluation. |
 | **PyMC (Python PPL)** | `with pm.Model(): mu = a + b*x; pm.Normal("y", mu, sigma, observed=y)` | Computes PyTensor log-probability graph and optimizes via MAP / NUTS. |
 
-```r
+```{r}
 # R Code Demonstration: MLE vs OLS Equivalency
 set.seed(42)
 x <- runif(50, 10, 30); y <- 5 + 2 * x + rnorm(50, 0, 3)
@@ -1232,7 +1249,7 @@ cat(sprintf("OLS Intercept: %.3f, Slope: %.3f\n", coef(ols_fit)[1], coef(ols_fit
 cat(sprintf("MLE Intercept: %.3f, Slope: %.3f\n", mle_fit$par[1], mle_fit$par[2]))
 ```
 
-```python
+```{python}
 # Python Code Demonstration
 import numpy as np
 from scipy.optimize import minimize
@@ -1254,7 +1271,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code Demonstration
 import torch
 
@@ -1274,7 +1291,7 @@ for _ in range(2000):
 print(f"PyTorch OLS -> Intercept: {a.item():.3f}, Slope: {b.item():.3f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code Demonstration: Gaussian Likelihood Regression
 data {
   int<lower=0> N;
@@ -1291,7 +1308,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration: Gaussian Likelihood Regression
 import pymc as pm
 
@@ -1334,14 +1351,14 @@ the distribution of the sum $X$ converges to a Normal distribution regardless of
 | **Stan (C++ PPL)** | `generated quantities { real x_sum = sum(uniform_rng(-1, 1, T)); }` | Direct simulation of aggregate sum via Stan pseudo-random number generator. |
 | **PyMC (Python PPL)** | `with pm.Model(): steps = pm.Uniform("s", -1, 1, shape=(N,T)); x = pm.Deterministic("x", steps.sum(axis=1))` | Declarative DAG node modeling sum of independent micro-distributions. |
 
-```r
+```{r}
 # R Code: Football Field Random Walk Convergence to Gaussian
 set.seed(42); N <- 10000; T_steps <- 16
 walk_outcomes <- rowSums(matrix(sample(c(-1, 1), N * T_steps, replace = TRUE), nrow = N))
 cat(sprintf("Mean: %.3f, SD: %.3f\n", mean(walk_outcomes), sd(walk_outcomes)))
 ```
 
-```python
+```{python}
 # Python Code: Sum of Random Steps
 import numpy as np
 
@@ -1352,7 +1369,7 @@ sums = np.sum(steps, axis=1)
 print(f"Python Walk Sum -> Mean: {np.mean(sums):.3f}, SD: {np.std(sums):.3f}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1365,7 +1382,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Central Limit Theorem Simulation
 data {
   int<lower=1> T_steps;
@@ -1378,7 +1395,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: CLT Sum Simulation
 import pymc as pm
 
@@ -1415,7 +1432,7 @@ Because probability conditionals $p(H \mid W) \neq p(W \mid H)$, these models es
 | **Stan (C++ PPL)** | `h ~ normal(a1 + b1*w, s1);` vs `w ~ normal(a2 + b2*h, s2);` | Distinct Stan likelihood blocks specifying opposite conditional distributions. |
 | **PyMC (Python PPL)** | `pm.Normal("h", a1 + b1*w, s1, observed=h)` vs `pm.Normal("w", a2 + b2*h, s2, observed=w)` | Separate DAG models conditioning on different observed nodes. |
 
-```r
+```{r}
 # R Code Demonstration: Asymmetry of Regression Directions
 set.seed(42)
 h <- rnorm(100, 160, 10); w <- 0.7 * h + rnorm(100, -50, 5)
@@ -1424,7 +1441,7 @@ cat(sprintf("Slope H~W: %.4f (Inverse: %.4f)\n", coef(fit_h_on_w)[2], 1/coef(fit
 cat(sprintf("Slope W~H: %.4f\n", coef(fit_w_on_h)[2]))
 ```
 
-```python
+```{python}
 # Python Code Demonstration
 import numpy as np
 
@@ -1439,7 +1456,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code Demonstration
 import torch
 
@@ -1454,7 +1471,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Comparing Regression Directions
 data {
   int<lower=0> N;
@@ -1471,7 +1488,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code Demonstration
 import pymc as pm
 
@@ -1516,7 +1533,7 @@ Centering transforms the predictor so that $\overline{x - \overline{x}} = 0$. Th
 | **Stan (C++ PPL)** | `vector[N] x_c = x - mean(x); y ~ normal(alpha + beta * x_c, sigma);` | Centered parameterization in Stan eliminating off-diagonal HMC mass matrix tilt. |
 | **PyMC (Python PPL)** | `x_c = x - x.mean(); mu = a + b * x_c` | PyTensor graph construction with centered design matrix for decoupled posterior sampling. |
 
-```r
+```{r}
 # R Code: Posterior Covariance Reduction via Centering
 x <- rnorm(100, 150, 10); y <- 10 + 0.5 * x + rnorm(100, 0, 2)
 cov_uncentered <- vcov(lm(y ~ x))[1, 2]
@@ -1524,7 +1541,7 @@ cov_centered   <- vcov(lm(y ~ I(x - mean(x))))[1, 2]
 cat(sprintf("Uncentered Cov(alpha, beta): %.6f\nCentered Cov(alpha, beta):   %.6f\n", cov_uncentered, cov_centered))
 ```
 
-```python
+```{python}
 # Python Code: Matrix Covariance Demonstration
 import numpy as np
 
@@ -1541,7 +1558,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1557,7 +1574,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Centered vs Uncentered Model
 data {
   int<lower=0> N;
@@ -1577,7 +1594,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Centered Regression Model
 import pymc as pm
 
@@ -1615,7 +1632,7 @@ Prior predictive simulation draws parameter tuples from joint priors *before* co
 | **Stan (C++ PPL)** | `generated quantities { real a_sim = normal_rng(60,10); ... }` | Stan block simulating prior predictive distribution without data likelihood. |
 | **PyMC (Python PPL)** | `idata_prior = pm.sample_prior_predictive(samples=1000)` | Dedicated PyMC API drawing samples directly from unconditioned prior graph. |
 
-```r
+```{r}
 # R Code: Prior Predictive Simulation for Weight-Height Model
 set.seed(42); N_sim <- 50; h_grid <- seq(130, 170, length.out = 100); h_bar <- 150
 alpha_prior <- rnorm(N_sim, 60, 10); beta_prior <- rlnorm(N_sim, 0, 0.5)
@@ -1623,7 +1640,7 @@ plot(NULL, xlim = c(130, 170), ylim = c(0, 120), xlab = "Height (cm)", ylab = "P
 for (i in 1:N_sim) lines(h_grid, alpha_prior[i] + beta_prior[i] * (h_grid - h_bar), col = rgb(0.2,0.4,0.8,0.3))
 ```
 
-```python
+```{python}
 # Python Code: Prior Predictive Simulation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1638,7 +1655,7 @@ lines = alpha_p[:, None] + beta_p[:, None] * (h_grid - h_bar)
 print(f"Python Prior Predictive Lines shape: {lines.shape}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1649,7 +1666,7 @@ lines_t = alpha_t + beta_t * (h_grid_t - 150)
 print(f"PyTorch Prior Lines shape: {lines_t.shape}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Prior Predictive Simulation
 data {
   int<lower=1> N_grid;
@@ -1663,7 +1680,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Prior Predictive Check
 import pymc as pm
 
@@ -1702,7 +1719,7 @@ Testing parameter recovery in the model's "small world" is a mandatory diagnosti
 | **Stan (C++ PPL)** | `y ~ normal(alpha + beta * x_c, sigma);` fitted on simulated inputs | Validates HMC sampler by checking if 95% posterior intervals cover true data-generating values. |
 | **PyMC (Python PPL)** | `pm.sample()` on synthetic dataset `y_sim` | MCMC recovery verification using ArviZ summary vs known ground-truth values. |
 
-```r
+```{r}
 # R Code: Parameter Recovery Simulation
 set.seed(42); N <- 200; a_true <- 55.0; b_true <- 0.6; s_true <- 4.0
 x <- runif(N, 130, 170); x_c <- x - mean(x)
@@ -1712,7 +1729,7 @@ cat(sprintf("True Alpha: %.1f -> Est: %.3f\nTrue Beta:  %.1f -> Est: %.3f\nTrue 
             a_true, coef(fit_sim)[1], b_true, coef(fit_sim)[2], s_true, summary(fit_sim)$sigma))
 ```
 
-```python
+```{python}
 # Python Code: Parameter Recovery
 import numpy as np
 
@@ -1729,7 +1746,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1745,7 +1762,7 @@ a_rec = y_sim_t.mean() - b_rec * x_c_t.mean()
 print(f"PyTorch Recovered -> Alpha: {a_rec.item():.3f}, Beta: {b_rec.item():.3f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Parameter Recovery Check
 data {
   int<lower=0> N;
@@ -1762,7 +1779,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Parameter Recovery Check
 import arviz as az
 import pymc as pm
@@ -1813,7 +1830,7 @@ If predictions are made by sampling $\alpha^{(s)}$ and $\beta^{(s)}$ independent
 | **Stan (C++ PPL)** | `as.data.frame(extract(stan_fit))` | Extracts correlated MCMC posterior draw vectors across parameter dimensions. |
 | **PyMC (Python PPL)** | `draws = idata.posterior[["alpha", "beta"]].to_dataframe()` | ArviZ InferenceData joint trace extraction preserving chain dependencies. |
 
-```r
+```{r}
 # R Code: Joint Posterior Sampling vs Independent Sampling
 set.seed(42); library(MASS)
 mu_vec <- c(55, 0.6); cov_mat <- matrix(c(1.0, -0.4, -0.4, 0.2), nrow = 2)
@@ -1822,7 +1839,7 @@ indep_draws <- cbind(rnorm(1000, 55, 1.0), rnorm(1000, 0.6, sqrt(0.2))) # Wrong 
 cat(sprintf("Joint Draws Covariance:       %.4f\nIndependent Draws Covariance: %.4f\n", cov(joint_draws)[1,2], cov(indep_draws)[1,2]))
 ```
 
-```python
+```{python}
 # Python Code: Joint Draws
 import numpy as np
 
@@ -1833,7 +1850,7 @@ joint_samples = np.random.multivariate_normal(mu_vec, cov_mat, size=1000)
 print(f"Python Joint Samples Covariance: {np.cov(joint_samples.T)[0, 1]:.4f}")
 ```
 
-```python
+```{python}
 # PyTorch Code Demonstration
 import torch
 
@@ -1847,7 +1864,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Joint Posterior Draws Sampling
 data { int<lower=0> N; vector[N] x; vector[N] y; }
 parameters { real alpha; real beta; real<lower=0> sigma; }
@@ -1858,7 +1875,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Joint Posterior Predictive Evaluation
 import pymc as pm
 
@@ -1892,7 +1909,7 @@ b_draws = idata_joint.posterior["beta"].values.flatten()
 | **Stan (C++ PPL)** | `generated quantities { real mu_new = a + b*x_new; real W_new = normal_rng(mu_new, sigma); }` | Inline Stan generation of mean expectation vs individual observation predictions. |
 | **PyMC (Python PPL)** | `pm.sample_posterior_predictive()` | Generates posterior predictive data nodes incorporating $\sigma$ noise. |
 
-```r
+```{r}
 # R Code: Mean Interval vs Prediction Interval
 set.seed(42); N_draws <- 10000
 a_draws <- rnorm(N_draws, 55, 0.5); b_draws <- rnorm(N_draws, 0.6, 0.05); s_draws <- rnorm(N_draws, 4, 0.2)
@@ -1902,7 +1919,7 @@ cat(sprintf("89%% Interval for Expected Mean mu(160): [%.2f, %.2f]\n", quantile(
 cat(sprintf("89%% Interval for New Individual W_new:  [%.2f, %.2f]\n", quantile(w_pred_draws, 0.055), quantile(w_pred_draws, 0.945)))
 ```
 
-```python
+```{python}
 # Python Code: Mean vs Prediction Interval
 import numpy as np
 
@@ -1924,7 +1941,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1945,7 +1962,7 @@ print(
 )
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Mean vs Predictive Quantity Generation
 data { real x_target; real x_bar; }
 parameters { real alpha; real beta; real<lower=0> sigma; }
@@ -1956,7 +1973,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Posterior Predictive Generation
 import pymc as pm
 
@@ -2059,7 +2076,7 @@ $$
 
 #### R Code Solution
 
-```r
+```{r}
 # ==============================================================================
 # Homework A03 - R Solution: Prior Predictive Simulation of Height vs Age
 # ==============================================================================
@@ -2115,7 +2132,7 @@ for (i in 1:n_sim) {
 
 #### Python Code Solution (NumPy & SciPy)
 
-```python
+```{python}
 # ==============================================================================
 # Homework A03 - Python Solution (NumPy & SciPy)
 # ==============================================================================
@@ -2156,7 +2173,7 @@ print(f"Model 3 (Biological)      Mean Adult Height (Age 20): {np.mean(H_m3[:, a
 
 #### PyTorch Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A03 - PyTorch Solution
 # ==============================================================================
@@ -2191,7 +2208,7 @@ print(f"PyTorch Model 3 (Biological)    Mean Height at Age 20: {H_m3_t[:, 50].me
 
 #### Stan Code Solution
 
-```stan
+```{stan, output.var="stan_model"}
 // ==============================================================================
 // Homework A03 - Stan Solution (Prior Predictive Simulation - 3 Formulations)
 // ==============================================================================
@@ -2234,7 +2251,7 @@ generated quantities {
 
 #### PyMC Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A03 - PyMC Solution (Prior Predictive Workflow - 3 Formulations)
 # ==============================================================================

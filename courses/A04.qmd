@@ -1,3 +1,21 @@
+---
+title: "A04 — Categories and Causes"
+subtitle: "Statistical Rethinking 2026"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Table of Contents"
+    code-fold: show
+    code-tools: true
+    theme: cosmo
+execute:
+  eval: false
+knitr:
+  opts_chunk:
+    python.reticulate: false
+---
+
 # A04 — Categories and Causes
 
 **Course:** Statistical Rethinking 2026  
@@ -533,7 +551,7 @@ Index coding:
 
 ### 8.2 Rethinking-style model
 
-```r
+```{r}
 m_cat <- quap(
   alist(
     W ~ dnorm(mu, sigma),
@@ -605,7 +623,7 @@ Draw-by-draw subtraction preserves this covariance automatically.
 
 ### 9.2 R implementation
 
-```r
+```{r}
 post <- extract.samples(m_cat)
 contrast_21 <- post$a[, 2] - post$a[, 1]
 precis(contrast_21)
@@ -1595,7 +1613,7 @@ In binary indicator coding $\mu_i = \alpha + \beta_M M_i$ (where $M_i \in \{0, 1
 | **Stan (C++ PPL)** | `vector[N] mu = alpha + beta_m * male;` | `vector[N] mu = alpha[S];` | Parameter vector `vector[K] alpha;` indexed by `int S[N]`. |
 | **PyMC (Python PPL)** | `mu = alpha + beta_m * male` | `mu = alpha[S]` | PyTensor symbolic array indexing `alpha[S]`. |
 
-```r
+```{r}
 # R Code: Indicator vs Index Coding Comparison
 data(Howell1); d <- Howell1[Howell1$age >= 18, ]
 # Indicator coding model
@@ -1607,7 +1625,7 @@ cat(sprintf("Indicator Intercept (Female): %.2f, Slope (Male-Female): %.2f\n", c
 cat(sprintf("Index Means -> Female a[1]: %.2f, Male a[2]: %.2f\n", coef(m_idx)[1], coef(m_idx)[2]))
 ```
 
-```python
+```{python}
 # Python Code: Indicator vs Index Coding
 import numpy as np
 
@@ -1623,7 +1641,7 @@ print(f"Indicator expectations: {mu_ind}")
 print(f"Index expectations:     {mu_idx}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1633,7 +1651,7 @@ mu_t = alpha_t[S_t - 1]
 print(f"PyTorch Index expectations: {mu_t}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Index-Variable Parameterization
 data {
   int<lower=1> N;
@@ -1652,7 +1670,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Index Variable Model
 import pymc as pm
 
@@ -1691,7 +1709,7 @@ Category parameters in a posterior distribution are correlated ($\operatorname{C
 | **Stan (C++ PPL)** | `generated quantities { real diff = a[2] - a[1]; }` | Direct inline generation of posterior contrast distribution within Stan. |
 | **PyMC (Python PPL)** | `diff = idata.posterior["a"][:, :, 1] - idata.posterior["a"][:, :, 0]` | ArviZ xarray posterior data contrast subtraction across chains/draws. |
 
-```r
+```{r}
 # R Code: Joint Posterior Contrast Extraction
 post <- extract.samples(m_idx)
 contrast_draws <- post$a[, 2] - post$a[, 1]
@@ -1699,7 +1717,7 @@ cat(sprintf("Posterior Mean Contrast (Male - Female): %.2f kg [89%% HPDI: %.2f, 
             mean(contrast_draws), quantile(contrast_draws, 0.055), quantile(contrast_draws, 0.945)))
 ```
 
-```python
+```{python}
 # Python Code: Posterior Contrast
 import numpy as np
 
@@ -1715,7 +1733,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1724,14 +1742,14 @@ contrast_t = a_t[:, 1] - a_t[:, 0]
 print(f"PyTorch Contrast Mean: {contrast_t.mean().item():.2f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Generated Quantities for Contrast
 generated quantities {
   real contrast_21 = a[2] - a[1];
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Deterministic Contrast Node
 with index_model:
   contrast = pm.Deterministic("contrast", a[1] - a[0])
@@ -1760,7 +1778,7 @@ Inspecting whether two marginal compatibility intervals (e.g. $p(\alpha_1 \mid D
 | **Stan (C++ PPL)** | `generated quantities { real mu_diff = a[2]-a[1]; real y_diff = normal_rng(a[2], s) - normal_rng(a[1], s); }` | Direct Stan generation of parameter contrast vs predictive contrast. |
 | **PyMC (Python PPL)** | `pm.sample_posterior_predictive()` | Posterior predictive sampling incorporating residual observation noise $\sigma$. |
 
-```r
+```{r}
 # R Code: Mean Contrast vs Predictive Contrast
 post <- extract.samples(m_idx)
 n_draws <- length(post$sigma)
@@ -1774,7 +1792,7 @@ cat(sprintf("Predictive Contrast Y2 - Y1 89%% HPDI:   [%.2f, %.2f]\n", quantile(
 cat(sprintf("Pr(Y2 > Y1): %.3f\n", mean(y_diff > 0)))
 ```
 
-```python
+```{python}
 # Python Code: Mean vs Predictive Contrast
 import numpy as np
 
@@ -1794,7 +1812,7 @@ print(
 print(f"Pr(Y2 > Y1): {np.mean(y_diff > 0):.3f}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1804,7 +1822,7 @@ y_diff_t = y2_t - y1_t
 print(f"PyTorch Pr(Y2 > Y1): {(y_diff_t > 0).float().mean().item():.3f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Mean vs Individual Predictive Contrast
 generated quantities {
   real mu_diff = a[2] - a[1];
@@ -1814,7 +1832,7 @@ generated quantities {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Posterior Predictive Contrast
 with index_model:
   y1_pred = pm.Normal("y1_pred", mu=a[0], sigma=sigma)
@@ -1837,7 +1855,7 @@ In a category-specific slope model $\mu_i = \alpha_{S_i} + \beta_{S_i}(H_i - \ov
 | **Stan (C++ PPL)** | `vector[N] mu = a[S] + b[S] .* (H - Hbar);` | Elementwise matrix vector multiplication of indexed parameters in Stan. |
 | **PyMC (Python PPL)** | `mu = a[S-1] + b[S-1] * (H - Hbar)` | Symbolic PyTensor vector parameter indexing for interaction terms. |
 
-```r
+```{r}
 # R Code: Category-Specific Slopes Model
 m_shw <- quap(
   alist(
@@ -1854,7 +1872,7 @@ contrast_160 <- (post$a[,2] + post$b[,2]*(160-150)) - (post$a[,1] + post$b[,1]*(
 cat(sprintf("Category Contrast at Height 160cm: %.2f kg\n", mean(contrast_160)))
 ```
 
-```python
+```{python}
 # Python Code: Category Slopes
 import numpy as np
 
@@ -1871,7 +1889,7 @@ print(f"Height Grid: {H_grid}")
 print(f"Contrasts by Height: {contrast_h.round(2)}")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1884,7 +1902,7 @@ contrast_t = (a_t[1] + b_t[1] * (H_t - 150.0)) - (
 print(f"PyTorch Height Contrasts: {contrast_t}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Category-Specific Slopes
 parameters {
   vector[K] a;
@@ -1896,7 +1914,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Category Slopes
 with pm.Model() as slope_model:
   a = pm.Normal("a", 50, 10, shape=2)
@@ -1927,7 +1945,7 @@ Conditioning on height $H$ holds height constant, transforming the estimand from
 | **Stan (C++ PPL)** | `generated quantities { real H_s1 = normal_rng(h[1], tau); real W_s1 = normal_rng(a[1] + b[1]*(H_s1-Hbar), sigma); }` | Inline Stan generation of total causal effect via structural simulation. |
 | **PyMC (Python PPL)** | `pm.sample_posterior_predictive()` on dual-equation joint model | Symbolic graph sampling of linked mediator and outcome nodes. |
 
-```r
+```{r}
 # R Code: Full Structural Causal Model Simulation
 m_full <- quap(
   alist(
@@ -1944,7 +1962,7 @@ total_contrast <- W_s2 - W_s1
 cat(sprintf("Total Causal Contrast E[W|do(S=2)] - E[W|do(S=1)]: %.2f kg\n", mean(total_contrast)))
 ```
 
-```python
+```{python}
 # Python Code: SCM Simulation
 import numpy as np
 
@@ -1963,7 +1981,7 @@ total_effect = W_do_s2 - W_do_s1
 print(f"Python Total Causal Effect Mean: {np.mean(total_effect):.2f} kg")
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -1978,7 +1996,7 @@ W_s2_t = torch.distributions.Normal(
 print(f"PyTorch Total Causal Effect: {(W_s2_t - W_s1_t).mean().item():.2f} kg")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Full System SCM
 model {
   H ~ normal(h[S], tau);
@@ -1986,7 +2004,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Dual Equation System
 with pm.Model() as scm_model:
   h_mean = pm.Normal("h_mean", 160, 10, shape=2)
@@ -2028,7 +2046,7 @@ The official script `LA04_sim heights validate example.r` executes a **generativ
 | **Stan (C++ PPL)** | SBC / Simulation-Based Calibration | Repeatedly samples parameters from priors, simulates data, and checks rank statistics. |
 | **PyMC (Python PPL)** | `pm.sample()` loop over synthetic arrays | MCMC trace recovery verification against true input parameters. |
 
-```r
+```{r}
 # R Code: Parameter Recovery Loop
 sim_validate <- function(N=100, b_true=0.5, sd_true=5) {
   H <- runif(N, 130, 170)
@@ -2041,7 +2059,7 @@ set.seed(42); res <- replicate(100, sim_validate())
 cat(sprintf("Mean Estimate: %.4f, 95%% Coverage Rate: %.2f%%\n", mean(res["est",]), mean(res["covered",])*100))
 ```
 
-```python
+```{python}
 # Python Code: Parameter Recovery Experiment
 import numpy as np
 
@@ -2062,7 +2080,7 @@ print(
 )
 ```
 
-```python
+```{python}
 # PyTorch Code
 import torch
 
@@ -2074,7 +2092,7 @@ b_rec = cov_hw[0, 1] / cov_hw[0, 0]
 print(f"PyTorch Single Iteration Recovered Slope: {b_rec.item():.4f}")
 ```
 
-```stan
+```{stan, output.var="stan_model"}
 // Stan Code: Simulation Validation Model
 data {
   int<lower=0> N;
@@ -2089,7 +2107,7 @@ model {
 }
 ```
 
-```python
+```{python}
 # PyMC Code: Recovery Check
 with pm.Model() as val_model:
   a = pm.Normal("a", 0, 10)
@@ -2263,7 +2281,7 @@ The 2026 course combines Chapter 4 regression foundation with Section 5.3 catego
 
 #### R Code Solution
 
-```r
+```{r}
 # ==============================================================================
 # Homework A04 - R Solution: Causal Effect of Monthly Growth on Weight
 # ==============================================================================
@@ -2341,7 +2359,7 @@ cat(sprintf("\nEstimated Causal Weight Gain per Year (12 Months): %.2f kg [89%% 
 
 #### Python Code Solution (NumPy & SciPy)
 
-```python
+```{python}
 # ==============================================================================
 # Homework A04 - Python Solution (NumPy & SciPy)
 # ==============================================================================
@@ -2377,7 +2395,7 @@ print(f"Mean Monthly Gain Prior: {b_prior.mean():.4f} kg/month")
 
 #### PyTorch Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A04 - PyTorch Solution
 # ==============================================================================
@@ -2409,7 +2427,7 @@ print(f"PyTorch Recovered Monthly Slope:  {b_rec_t.item():.4f} kg/month")
 
 #### Stan Code Solution
 
-```stan
+```{stan, output.var="stan_model"}
 // ==============================================================================
 // Homework A04 - Stan Solution (Causal Monthly Growth Estimator)
 // ==============================================================================
@@ -2442,7 +2460,7 @@ generated quantities {
 
 #### PyMC Code Solution
 
-```python
+```{python}
 # ==============================================================================
 # Homework A04 - PyMC Solution (Prior Predictive & Estimation Workflow)
 # ==============================================================================

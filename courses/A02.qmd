@@ -39,23 +39,11 @@ The garden of forking data represents every sequence of observations that could 
 
 In compressed mathematical form:
 
-$$
-\text{posterior plausibility}
-\propto
-\text{likelihood}
-\times
-\text{prior plausibility}
-$$
+$$ \text{posterior plausibility} \propto \text{likelihood} \times \text{prior plausibility} $$
 
 The lecture then extends this logic from inference about a parameter to prediction of new observations:
 
-$$
-\text{posterior}
-\rightarrow
-\text{sampling distribution}
-\rightarrow
-\text{posterior predictive distribution}
-$$
+$$ \text{posterior} \rightarrow \text{sampling distribution} \rightarrow \text{posterior predictive distribution} $$
 
 A02 therefore develops four connected ideas:
 
@@ -92,25 +80,13 @@ The scripts reveal three central visual demonstrations:
 
 The posterior predictive script uses the observed sequence with six water outcomes and three land outcomes. Starting from a uniform beta prior, it therefore uses:
 
-$$
-p \mid W=6,L=3
-\sim
-\operatorname{Beta}(7,4)
-$$
+$$ p \mid W=6,L=3 \sim \mathrm{Beta}(7,4) $$
 
 The lecture-oriented code does not merely plot a posterior. It animates the whole inferential pipeline:
 
-$$
-p
-\sim
-\text{posterior}
-$$
+$$ p \sim \text{posterior} $$
 
-$$
-W_{\mathrm{new}}
-\sim
-\operatorname{Binomial}(9,p)
-$$
+$$ W_{\mathrm{new}} \sim \mathrm{Binomial}(9,p) $$
 
 and repeats these two steps to accumulate the posterior predictive distribution.
 
@@ -126,9 +102,7 @@ A generative probability model instead retains all paths that could have occurre
 
 Suppose a model can generate a sequence of binary observations:
 
-$$
-D = (d_1,d_2,\ldots,d_N)
-$$
+$$ D = (d_1,d_2,\ldots,d_N) $$
 
 with each $d_i$ equal to water or land, success or failure, purchase or no purchase.
 
@@ -146,17 +120,13 @@ This finite example is important because it shows that Bayesian updating does no
 
 For conjecture $h$, the likelihood is:
 
-$$
-p(D \mid h)
-$$
+$$ p(D \mid h) $$
 
 It measures how readily conjecture $h$ produces the observed data.
 
 A conjecture that cannot produce the observed sequence has:
 
-$$
-p(D \mid h)=0
-$$
+$$ p(D \mid h)=0 $$
 
 and is eliminated inside the model.
 
@@ -176,15 +146,11 @@ Some conjectures may have been more plausible before the current data because of
 
 This information is encoded by the prior:
 
-$$
-p(h)
-$$
+$$ p(h) $$
 
 The combined weight is:
 
-$$
-p(D \mid h)p(h)
-$$
+$$ p(D \mid h)p(h) $$
 
 Multiplication is compressed counting. The number of ways a conjecture can be present is combined with the number of ways it can produce the observations.
 
@@ -192,21 +158,11 @@ Multiplication is compressed counting. The number of ways a conjecture can be pr
 
 The products do not generally sum to one. They are converted into probabilities by dividing by the sum across all conjectures:
 
-$$
-p(h \mid D)
-=
-\frac{p(D \mid h)p(h)}
-{\sum_{h'}p(D \mid h')p(h')}
-$$
+$$ p(h \mid D) = \frac{p(D \mid h)p(h)} {\sum_{h'}p(D \mid h')p(h')} $$
 
 For a continuous parameter $p$, the denominator becomes an integral:
 
-$$
-p(p \mid D)
-=
-\frac{p(D \mid p)p(p)}
-{\int p(D \mid p)p(p)\,dp}
-$$
+$$ p(p \mid D) = \frac{p(D \mid p)p(p)} {\int p(D \mid p)p(p)\,dp} $$
 
 The denominator does not change the relative ranking of parameter values. It standardizes the posterior so that its total probability is one.
 
@@ -216,15 +172,7 @@ The denominator does not change the relative ranking of parameter values. It sta
 
 The conventional expression is:
 
-$$
-p(\theta \mid D,M)
-=
-\frac{
-p(D \mid \theta,M)p(\theta \mid M)
-}{
-p(D \mid M)
-}
-$$
+$$ p(\theta \mid D,M) = \frac{ p(D \mid \theta,M)p(\theta \mid M) }{ p(D \mid M) } $$
 
 where:
 
@@ -238,14 +186,7 @@ where:
 
 The denominator is:
 
-$$
-p(D \mid M)
-=
-\int
-p(D \mid \theta,M)
-p(\theta \mid M)
-\,d\theta
-$$
+$$ p(D \mid M) = \int p(D \mid \theta,M) p(\theta \mid M) \,d\theta $$
 
 For a discrete set of conjectures, the integral is replaced by a sum.
 
@@ -263,15 +204,11 @@ It states what is plausible conditional on:
 
 Therefore:
 
-$$
-p(\theta \mid D)
-$$
+$$ p(\theta \mid D) $$
 
 is shorthand for:
 
-$$
-p(\theta \mid D,M)
-$$
+$$ p(\theta \mid D,M) $$
 
 This suppressed conditioning is easy to forget and is responsible for many overconfident interpretations.
 
@@ -279,15 +216,11 @@ This suppressed conditioning is easy to forget and is responsible for many overc
 
 The likelihood:
 
-$$
-p(D \mid \theta)
-$$
+$$ p(D \mid \theta) $$
 
 is not the same object as:
 
-$$
-p(\theta \mid D)
-$$
+$$ p(\theta \mid D) $$
 
 The first asks how compatible the observations are with a parameter value.
 
@@ -312,39 +245,21 @@ Let:
 
 The generative model is:
 
-$$
-W
-\sim
-\operatorname{Binomial}(N,p)
-$$
+$$ W \sim \mathrm{Binomial}(N,p) $$
 
 A complete elementary Bayesian model adds a prior:
 
-$$
-W
-\sim
-\operatorname{Binomial}(N,p)
-$$
+$$ W \sim \mathrm{Binomial}(N,p) $$
 
-$$
-p
-\sim
-\operatorname{Beta}(\alpha,\beta)
-$$
+$$ p \sim \mathrm{Beta}(\alpha,\beta) $$
 
 The observed A02 example contains:
 
-$$
-W=6
-$$
+$$ W=6 $$
 
-$$
-L=3
-$$
+$$ L=3 $$
 
-$$
-N=9
-$$
+$$ N=9 $$
 
 ### 5.1 Why a binomial distribution?
 
@@ -358,18 +273,11 @@ The binomial model is appropriate inside the small world when:
 
 The probability of observing exactly $W$ water outcomes in $N$ tosses is:
 
-$$
-p(W \mid N,p)
-=
-{N \choose W}
-p^W(1-p)^{N-W}
-$$
+$$ p(W \mid N,p) = {N \choose W} p^W(1-p)^{N-W} $$
 
 The combinatorial term:
 
-$$
-{N \choose W}
-$$
+$$ {N \choose W} $$
 
 counts how many distinct orderings contain $W$ water outcomes and $N-W$ land outcomes.
 
@@ -396,18 +304,11 @@ The prior assigns plausibility to possible values of $p$ before conditioning on 
 
 A beta prior has density:
 
-$$
-p(p)
-=
-\frac{1}{B(\alpha,\beta)}
-p^{\alpha-1}(1-p)^{\beta-1}
-$$
+$$ p(p) = \frac{1}{B(\alpha,\beta)} p^{\alpha-1}(1-p)^{\beta-1} $$
 
 for:
 
-$$
-0 \leq p \leq 1
-$$
+$$ 0 \leq p \leq 1 $$
 
 The parameters $\alpha$ and $\beta$ can be understood as controlling the prior concentration toward water and land.
 
@@ -415,21 +316,13 @@ The parameters $\alpha$ and $\beta$ can be understood as controlling the prior c
 
 The official sequential-updating script begins with:
 
-$$
-\alpha=1
-$$
+$$ \alpha=1 $$
 
-$$
-\beta=1
-$$
+$$ \beta=1 $$
 
 so:
 
-$$
-p
-\sim
-\operatorname{Beta}(1,1)
-$$
+$$ p \sim \mathrm{Beta}(1,1) $$
 
 This density is uniform over the interval from zero to one.
 
@@ -448,23 +341,17 @@ Different priors encode different initial gardens of forking data.
 
 A mild **regularizing prior** such as:
 
-$$
-p \sim \operatorname{Beta}(2,2)
-$$
+$$ p \sim \mathrm{Beta}(2,2) $$
 
 places zero probability mass at the absolute boundaries ($p=0$ and $p=1$) and gently pulls estimates toward the center ($0.5$). This prevents overreacting to small-sample fluctuations (for example, inferring $p=1.0$ after observing 3 consecutive water tosses).
 
 A strongly **informative prior** such as:
 
-$$
-p \sim \operatorname{Beta}(20,10)
-$$
+$$ p \sim \mathrm{Beta}(20,10) $$
 
 expresses substantial prior scientific evidence concentrated near:
 
-$$
-\mathbb{E}[p] = \frac{20}{20+10} = \frac{2}{3}
-$$
+$$ \mathbb{E}[p] = \frac{20}{20+10} = \frac{2}{3} $$
 
 representing the equivalent weight of 20 prior water and 10 prior land observations.
 
@@ -478,101 +365,47 @@ The beta distribution is conjugate to the binomial likelihood.
 
 If:
 
-$$
-p
-\sim
-\operatorname{Beta}(\alpha,\beta)
-$$
+$$ p \sim \mathrm{Beta}(\alpha,\beta) $$
 
 and:
 
-$$
-W
-\sim
-\operatorname{Binomial}(N,p)
-$$
+$$ W \sim \mathrm{Binomial}(N,p) $$
 
 then:
 
-$$
-p \mid W,N
-\sim
-\operatorname{Beta}
-\left(
-\alpha+W,
-\beta+N-W
-\right)
-$$
+$$ p \mid W,N \sim \mathrm{Beta} \left( \alpha+W, \beta+N-W \right) $$
 
 Using $L=N-W$:
 
-$$
-p \mid W,L
-\sim
-\operatorname{Beta}
-\left(
-\alpha+W,
-\beta+L
-\right)
-$$
+$$ p \mid W,L \sim \mathrm{Beta} \left( \alpha+W, \beta+L \right) $$
 
 For the A02 example with a uniform prior:
 
-$$
-p
-\sim
-\operatorname{Beta}(1,1)
-$$
+$$ p \sim \mathrm{Beta}(1,1) $$
 
 and six water plus three land observations:
 
-$$
-p \mid W=6,L=3
-\sim
-\operatorname{Beta}(7,4)
-$$
+$$ p \mid W=6,L=3 \sim \mathrm{Beta}(7,4) $$
 
 ### 7.1 Posterior mean
 
 For a beta distribution:
 
-$$
-\mathbb{E}[p \mid D]
-=
-\frac{\alpha+W}
-{\alpha+\beta+N}
-$$
+$$ \mathbb{E}[p \mid D] = \frac{\alpha+W} {\alpha+\beta+N} $$
 
 Therefore:
 
-$$
-\mathbb{E}[p \mid D]
-=
-\frac{7}{11}
-\approx
-0.636
-$$
+$$ \mathbb{E}[p \mid D] = \frac{7}{11} \approx 0.636 $$
 
 ### 7.2 Posterior mode
 
 When both posterior shape parameters are greater than one, the mode is:
 
-$$
-p_{\mathrm{mode}}
-=
-\frac{\alpha+W-1}
-{\alpha+\beta+N-2}
-$$
+$$ p_{\mathrm{mode}} = \frac{\alpha+W-1} {\alpha+\beta+N-2} $$
 
 For the example:
 
-$$
-p_{\mathrm{mode}}
-=
-\frac{6}{9}
-\approx
-0.667
-$$
+$$ p_{\mathrm{mode}} = \frac{6}{9} \approx 0.667 $$
 
 The posterior mean and posterior mode are different summaries. Neither is automatically the correct decision.
 
@@ -582,37 +415,21 @@ The posterior mean and posterior mode are different summaries. Neither is automa
 
 The official globe-tossing script begins with:
 
-$$
-a=1
-$$
+$$ a=1 $$
 
-$$
-b=1
-$$
+$$ b=1 $$
 
 After each water observation:
 
-$$
-a
-\leftarrow
-a+1
-$$
+$$ a \leftarrow a+1 $$
 
 After each land observation:
 
-$$
-b
-\leftarrow
-b+1
-$$
+$$ b \leftarrow b+1 $$
 
 The posterior after each toss is:
 
-$$
-p \mid D_t
-\sim
-\operatorname{Beta}(a_t,b_t)
-$$
+$$ p \mid D_t \sim \mathrm{Beta}(a_t,b_t) $$
 
 where $D_t$ denotes the observations available after toss $t$.
 
@@ -622,12 +439,7 @@ This animation demonstrates three facts.
 
 Bayesian updating can be performed sequentially:
 
-$$
-p(\theta \mid D_1,D_2)
-\propto
-p(D_2 \mid \theta)
-p(\theta \mid D_1)
-$$
+$$ p(\theta \mid D_1,D_2) \propto p(D_2 \mid \theta) p(\theta \mid D_1) $$
 
 The posterior after $D_1$ becomes the prior before observing $D_2$.
 
@@ -635,11 +447,7 @@ The posterior after $D_1$ becomes the prior before observing $D_2$.
 
 If observations are conditionally independent given $p$:
 
-$$
-p(D \mid p)
-=
-\prod_{i=1}^{N}p(d_i \mid p)
-$$
+$$ p(D \mid p) = \prod_{i=1}^{N}p(d_i \mid p) $$
 
 Multiplication is commutative, so the final posterior depends on the counts, not their order.
 
@@ -659,9 +467,7 @@ The marble example has a finite set of conjectures. The globe parameter $p$ can 
 
 The inferential target is therefore a continuous posterior density:
 
-$$
-p(p \mid W,N)
-$$
+$$ p(p \mid W,N) $$
 
 The book introduces several engines for approximating posterior distributions:
 
@@ -677,9 +483,7 @@ A02 focuses mainly on the logic of the posterior and on direct simulation. The b
 
 Grid approximation replaces the continuum of possible parameter values with a finite set:
 
-$$
-p_1,p_2,\ldots,p_K
-$$
+$$ p_1,p_2,\ldots,p_K $$
 
 For each grid value:
 
@@ -690,25 +494,17 @@ For each grid value:
 
 Formally:
 
-$$
-q_k
-=
-p(W \mid N,p_k)p(p_k)
-$$
+$$ q_k = p(W \mid N,p_k)p(p_k) $$
 
 and:
 
-$$
-\widetilde{q}_k
-=
-\frac{q_k}{\sum_{j=1}^{K}q_j}
-$$
+$$ \widetilde{q}_k = \frac{q_k}{\sum_{j=1}^{K}q_j} $$
 
 The normalized values $\widetilde{q}_k$ approximate the posterior probabilities on the grid.
 
 A basic R implementation is:
 
-```{r}
+```r
 p_grid <- seq(0, 1, length.out = 1000)
 prior <- rep(1, 1000)
 likelihood <- dbinom(6, size = 9, prob = p_grid)
@@ -722,31 +518,17 @@ Grid approximation is inefficient in high dimensions, but it makes every operati
 
 It shows explicitly that the posterior is obtained by:
 
-$$
-\text{prior}
-\times
-\text{likelihood}
-\rightarrow
-\text{unnormalized posterior}
-\rightarrow
-\text{normalized posterior}
-$$
+$$ \text{prior} \times \text{likelihood} \rightarrow \text{unnormalized posterior} \rightarrow \text{normalized posterior} $$
 
 ### 10.2 Why grid approximation does not scale
 
 If each of $d$ parameters is represented by $K$ grid points, the total number of combinations is:
 
-$$
-K^d
-$$
+$$ K^d $$
 
 With $K=100$ and $d=5$:
 
-$$
-100^5
-=
-10^{10}
-$$
+$$ 100^5 = 10^{10} $$
 
 This curse of dimensionality makes grid approximation impractical for most realistic models.
 
@@ -764,15 +546,7 @@ The basic strategy is:
 
 Symbolically:
 
-$$
-p(\theta \mid D)
-\approx
-\operatorname{Normal}
-\left(
-\widehat{\theta}_{\mathrm{mode}},
-\widehat{\Sigma}
-\right)
-$$
+$$ p(\theta \mid D) \approx \mathrm{Normal} \left( \widehat{\theta}_{\mathrm{mode}}, \widehat{\Sigma} \right) $$
 
 The approximation works best when the posterior is approximately symmetric and bell-shaped.
 
@@ -806,21 +580,15 @@ Chapter 3 replaces direct manipulation of posterior densities with samples.
 
 Suppose we have grid values $p_k$ and normalized posterior probabilities $\widetilde{q}_k$. We can draw:
 
-$$
-p^{(s)}
-\sim
-p(p \mid D)
-$$
+$$ p^{(s)} \sim p(p \mid D) $$
 
 for:
 
-$$
-s=1,2,\ldots,S
-$$
+$$ s=1,2,\ldots,S $$
 
 Using grid approximation in R:
 
-```{r}
+```r
 samples <- sample(
   p_grid,
   prob = posterior,
@@ -839,23 +607,11 @@ Once samples are available, many posterior questions become simple operations.
 
 For example:
 
-$$
-\Pr(p<0.5 \mid D)
-\approx
-\frac{1}{S}
-\sum_{s=1}^{S}
-\mathbb{I}
-\left[p^{(s)}<0.5\right]
-$$
+$$ \Pr(p<0.5 \mid D) \approx \frac{1}{S} \sum_{s=1}^{S} \mathbb{I} \left[p^{(s)}<0.5\right] $$
 
 The posterior mean is approximated by:
 
-$$
-\mathbb{E}[p \mid D]
-\approx
-\frac{1}{S}
-\sum_{s=1}^{S}p^{(s)}
-$$
+$$ \mathbb{E}[p \mid D] \approx \frac{1}{S} \sum_{s=1}^{S}p^{(s)} $$
 
 A posterior quantile is obtained from the corresponding empirical quantile of the samples.
 
@@ -873,20 +629,11 @@ Useful summaries answer specific questions.
 
 The posterior probability that $p$ lies between $a$ and $b$ is:
 
-$$
-\Pr(a < p < b \mid D)
-$$
+$$ \Pr(a < p < b \mid D) $$
 
 Using samples:
 
-$$
-\Pr(a < p < b \mid D)
-\approx
-\frac{1}{S}
-\sum_{s=1}^{S}
-\mathbb{I}
-\left[a<p^{(s)}<b\right]
-$$
+$$ \Pr(a < p < b \mid D) \approx \frac{1}{S} \sum_{s=1}^{S} \mathbb{I} \left[a<p^{(s)}<b\right] $$
 
 This is a direct probability statement about the parameter inside the model.
 
@@ -896,15 +643,11 @@ A central interval with posterior mass $q$ removes equal posterior mass from bot
 
 For a central 89 percent interval, the lower and upper quantiles are approximately:
 
-$$
-0.055
-$$
+$$ 0.055 $$
 
 and:
 
-$$
-0.945
-$$
+$$ 0.945 $$
 
 The interval is a summary of posterior mass. It is not a repeated-sampling confidence interval.
 
@@ -924,51 +667,25 @@ A posterior does not automatically nominate one best number.
 
 A decision $d$ can be evaluated with a loss function:
 
-$$
-L(d,p)
-$$
+$$ L(d,p) $$
 
 The expected posterior loss is:
 
-$$
-\mathbb{E}
-\left[
-L(d,p)
-\mid D
-\right]
-=
-\int
-L(d,p)
-p(p \mid D)
-\,dp
-$$
+$$ \mathbb{E} \left[ L(d,p) \mid D \right] = \int L(d,p) p(p \mid D) \,dp $$
 
 The optimal decision minimizes expected loss:
 
-$$
-d^*
-=
-\arg\min_d
-\mathbb{E}
-\left[
-L(d,p)
-\mid D
-\right]
-$$
+$$ d^* = \arg\min_d \mathbb{E} \left[ L(d,p) \mid D \right] $$
 
 Under absolute-error loss:
 
-$$
-L(d,p)=|d-p|
-$$
+$$ L(d,p)=|d-p| $$
 
 the optimal point is the posterior median.
 
 Under squared-error loss:
 
-$$
-L(d,p)=(d-p)^2
-$$
+$$ L(d,p)=(d-p)^2 $$
 
 the optimal point is the posterior mean.
 
@@ -982,28 +699,17 @@ Inference about $p$ is not the same as prediction of future observations.
 
 The posterior answers questions about the parameter:
 
-$$
-p(p \mid D)
-$$
+$$ p(p \mid D) $$
 
 The posterior predictive distribution answers questions about new data:
 
-$$
-p(\widetilde{W} \mid D)
-$$
+$$ p(\widetilde{W} \mid D) $$
 
 where $\widetilde{W}$ denotes a future count of water observations.
 
 The posterior predictive distribution is:
 
-$$
-p(\widetilde{W} \mid D)
-=
-\int
-p(\widetilde{W} \mid p)
-p(p \mid D)
-\,dp
-$$
+$$ p(\widetilde{W} \mid D) = \int p(\widetilde{W} \mid p) p(p \mid D) \,dp $$
 
 This expression averages the sampling distribution over posterior uncertainty in $p$.
 
@@ -1017,32 +723,21 @@ We do not know the exact value of $p$.
 
 This uncertainty is represented by:
 
-$$
-p(p \mid D)
-$$
+$$ p(p \mid D) $$
 
 #### Observation uncertainty
 
 Even if $p$ were known exactly, future binary outcomes would remain random unless:
 
-$$
-p=0
-$$
+$$ p=0 $$
 
 or:
 
-$$
-p=1
-$$
+$$ p=1 $$
 
 For a known $p$:
 
-$$
-\widetilde{W}
-\sim
-\operatorname{Binomial}
-(\widetilde{N},p)
-$$
+$$ \widetilde{W} \sim \mathrm{Binomial} (\widetilde{N},p) $$
 
 The posterior predictive distribution propagates both types of uncertainty.
 
@@ -1052,21 +747,13 @@ The posterior predictive distribution propagates both types of uncertainty.
 
 The A02 predictive script uses:
 
-$$
-W=6
-$$
+$$ W=6 $$
 
-$$
-L=3
-$$
+$$ L=3 $$
 
 and a uniform beta prior, producing:
 
-$$
-p \mid D
-\sim
-\operatorname{Beta}(7,4)
-$$
+$$ p \mid D \sim \mathrm{Beta}(7,4) $$
 
 For each simulation $s$:
 
@@ -1075,28 +762,17 @@ For each simulation $s$:
 
 Formally:
 
-$$
-p^{(s)}
-\sim
-\operatorname{Beta}(7,4)
-$$
+$$ p^{(s)} \sim \mathrm{Beta}(7,4) $$
 
-$$
-\widetilde{W}^{(s)}
-\sim
-\operatorname{Binomial}
-(9,p^{(s)})
-$$
+$$ \widetilde{W}^{(s)} \sim \mathrm{Binomial} (9,p^{(s)}) $$
 
 Repeated draws approximate:
 
-$$
-p(\widetilde{W} \mid D)
-$$
+$$ p(\widetilde{W} \mid D) $$
 
 A compact R version is:
 
-```{r}
+```r
 p_sim <- rbeta(10000, 7, 4)
 W_sim <- rbinom(10000, size = 9, prob = p_sim)
 ```
@@ -1109,14 +785,7 @@ The official animation separates the process into three panels:
 
 This makes visible the integral:
 
-$$
-p(\widetilde{W} \mid D)
-=
-\int
-p(\widetilde{W} \mid p)
-p(p \mid D)
-\,dp
-$$
+$$ p(\widetilde{W} \mid D) = \int p(\widetilde{W} \mid p) p(p \mid D) \,dp $$
 
 ---
 
@@ -1128,28 +797,13 @@ The same simulation structure can be run before seeing data.
 
 The prior predictive distribution is:
 
-$$
-p(\widetilde{W})
-=
-\int
-p(\widetilde{W} \mid p)
-p(p)
-\,dp
-$$
+$$ p(\widetilde{W}) = \int p(\widetilde{W} \mid p) p(p) \,dp $$
 
 Simulation proceeds as:
 
-$$
-p^{(s)}
-\sim
-p(p)
-$$
+$$ p^{(s)} \sim p(p) $$
 
-$$
-\widetilde{W}^{(s)}
-\sim
-p(\widetilde{W} \mid p^{(s)})
-$$
+$$ \widetilde{W}^{(s)} \sim p(\widetilde{W} \mid p^{(s)}) $$
 
 Prior predictive simulation asks:
 
@@ -1161,14 +815,7 @@ It is a way to inspect the joint implications of the likelihood and prior.
 
 The posterior predictive distribution is:
 
-$$
-p(\widetilde{W} \mid D)
-=
-\int
-p(\widetilde{W} \mid p)
-p(p \mid D)
-\,dp
-$$
+$$ p(\widetilde{W} \mid D) = \int p(\widetilde{W} \mid p) p(p \mid D) \,dp $$
 
 It asks:
 
@@ -1211,9 +858,7 @@ To formalize posterior predictive checking, we define five key mathematical elem
 
 - **$D_{\mathrm{rep}}^{(s)}$ — Replicated dataset:**  
   A synthetic dataset simulated from the likelihood conditional on the $s$-th posterior draw:
-  $$
-  D_{\mathrm{rep}}^{(s)} \sim p(D_{\mathrm{rep}} \mid \theta^{(s)})
-  $$
+$$ D_{\mathrm{rep}}^{(s)} \sim p(D_{\mathrm{rep}} \mid \theta^{(s)}) $$
   It possesses the exact same sample size, structure, and experimental conditions as the original observed dataset $D$.
 
 - **$T(D)$ — Diagnostic test statistic / feature function:**  
@@ -1226,13 +871,9 @@ To formalize posterior predictive checking, we define five key mathematical elem
 A generic posterior predictive check proceeds in four steps:
 
 1. **Draw parameter values** from the posterior distribution:
-   $$
-   \theta^{(s)} \sim p(\theta \mid D), \quad s=1,\ldots,S
-   $$
+$$ \theta^{(s)} \sim p(\theta \mid D), \quad s=1,\ldots,S $$
 2. **Simulate replicated data** under each drawn parameter value:
-   $$
-   D_{\mathrm{rep}}^{(s)} \sim p(D_{\mathrm{rep}} \mid \theta^{(s)})
-   $$
+$$ D_{\mathrm{rep}}^{(s)} \sim p(D_{\mathrm{rep}} \mid \theta^{(s)}) $$
 3. **Compute the diagnostic feature** $T(\cdot)$ on each replicate to form an empirical distribution $\{T\left(D_{\mathrm{rep}}^{(s)}\right)\}_{s=1}^S$.
 4. **Compare the observed statistic** $T(D)$ with the distribution of replicated statistics $T\left(D_{\mathrm{rep}}^{(s)}\right)$.
 
@@ -1287,15 +928,11 @@ The inferential answer is always conditional on the actual data-generating and s
 
 ### Error 1: Interpreting the likelihood as a probability of the parameter
 
-$$
-p(D \mid \theta)
-$$
+$$ p(D \mid \theta) $$
 
 is not:
 
-$$
-p(\theta \mid D)
-$$
+$$ p(\theta \mid D) $$
 
 ### Error 2: Treating a uniform prior as assumption-free
 
@@ -1313,9 +950,7 @@ Knowing $p$ exactly would not make future tosses deterministic.
 
 Using only:
 
-$$
-\widehat{p}
-$$
+$$ \widehat{p} $$
 
 in a binomial sampling distribution ignores posterior uncertainty in $p$ and can produce overconfident predictions.
 
@@ -1347,41 +982,23 @@ Suppose a CRM team sends an offer to $N$ customers and observes $Y$ purchases.
 
 A simple model is:
 
-$$
-Y
-\sim
-\operatorname{Binomial}(N,p)
-$$
+$$ Y \sim \mathrm{Binomial}(N,p) $$
 
 where $p$ is the purchase probability for customers generated under the same process.
 
 With:
 
-$$
-p
-\sim
-\operatorname{Beta}(\alpha,\beta)
-$$
+$$ p \sim \mathrm{Beta}(\alpha,\beta) $$
 
 the posterior is:
 
-$$
-p \mid Y,N
-\sim
-\operatorname{Beta}
-\left(
-\alpha+Y,
-\beta+N-Y
-\right)
-$$
+$$ p \mid Y,N \sim \mathrm{Beta} \left( \alpha+Y, \beta+N-Y \right) $$
 
 ### 20.1 Posterior question
 
 A useful posterior question is:
 
-$$
-\Pr(p>p_0 \mid D)
-$$
+$$ \Pr(p>p_0 \mid D) $$
 
 where $p_0$ is the minimum conversion rate required for campaign profitability.
 
@@ -1391,39 +1008,19 @@ Suppose the next campaign will target $N_{\mathrm{new}}$ comparable customers.
 
 The predictive quantity is:
 
-$$
-Y_{\mathrm{new}}
-\sim
-\operatorname{Binomial}
-(N_{\mathrm{new}},p)
-$$
+$$ Y_{\mathrm{new}} \sim \mathrm{Binomial} (N_{\mathrm{new}},p) $$
 
 averaged over:
 
-$$
-p(p \mid D)
-$$
+$$ p(p \mid D) $$
 
 Therefore:
 
-$$
-p(Y_{\mathrm{new}} \mid D)
-=
-\int
-p(Y_{\mathrm{new}} \mid p)
-p(p \mid D)
-\,dp
-$$
+$$ p(Y_{\mathrm{new}} \mid D) = \int p(Y_{\mathrm{new}} \mid p) p(p \mid D) \,dp $$
 
 This distribution is more useful for campaign planning than a single estimated conversion rate because it provides probabilities of operational outcomes such as:
 
-$$
-\Pr
-\left(
-Y_{\mathrm{new}} \geq y_{\mathrm{break-even}}
-\mid D
-\right)
-$$
+$$ \Pr \left( Y_{\mathrm{new}} \geq y_{\mathrm{break-even}} \mid D \right) $$
 
 ### 20.3 Why the elementary binomial model may fail in CRM
 
@@ -1444,25 +1041,11 @@ The elementary model assumes one common $p$. It may therefore underestimate vari
 
 A richer generative model might use customer-specific probabilities:
 
-$$
-Y_i
-\sim
-\operatorname{Bernoulli}(p_i)
-$$
+$$ Y_i \sim \mathrm{Bernoulli}(p_i) $$
 
 with:
 
-$$
-\operatorname{logit}(p_i)
-=
-\alpha
-+
-\beta_A A_i
-+
-\beta_X X_i
-+
-u_i
-$$
+$$ \mathrm{logit}(p_i) = \alpha + \beta_A A_i + \beta_X X_i + u_i $$
 
 A02 supplies the fundamental update-and-predict logic. Later lectures provide the regression, causal, and multilevel structures needed for realistic CRM data.
 
@@ -1487,26 +1070,17 @@ A02 suggests that a causal platform should represent distributions and simulatio
 
 A robust workflow should preserve the distinction between:
 
-$$
-p(\theta \mid D)
-$$
+$$ p(\theta \mid D) $$
 
 and:
 
-$$
-p(\widetilde{D} \mid D)
-$$
+$$ p(\widetilde{D} \mid D) $$
 
 The first concerns uncertainty about model quantities. The second concerns uncertainty about future observations.
 
 For causal questions, the system must also distinguish both from an interventional distribution such as:
 
-$$
-p
-\left(
-Y \mid \operatorname{do}(A=a)
-\right)
-$$
+$$ p \left( Y \mid \mathrm{do}(A=a) \right) $$
 
 A posterior predictive distribution under the observed assignment process is not automatically a causal prediction under intervention.
 
@@ -1540,7 +1114,7 @@ A posterior predictive distribution under the observed assignment process is not
 2. Why is $p(D \mid \theta)$ not the same as $p(\theta \mid D)$?
 3. What assumptions justify the binomial likelihood in the globe-tossing example?
 4. Why does the order of water and land observations not affect the posterior under this model?
-5. Starting from $\operatorname{Beta}(1,1)$, what posterior follows from six water and three land observations?
+5. Starting from $\mathrm{Beta}(1,1)$, what posterior follows from six water and three land observations?
 6. Why are the posterior mean and posterior mode different in the globe example?
 7. How does sequential updating relate to batch updating?
 8. Why does grid approximation fail in high-dimensional models?
@@ -1551,7 +1125,7 @@ A posterior predictive distribution under the observed assignment process is not
 13. Why can a model predict observed data well while remaining causally wrong?
 14. What sequence-based pattern could reveal failure of a binomial model even when the total count appears plausible?
 15. Why is a posterior predictive CRM conversion distribution more useful than a single conversion-rate estimate?
-16. How does $p(Y_{\mathrm{new}} \mid D)$ differ from $p(Y \mid \operatorname{do}(A=a),D)$?
+16. How does $p(Y_{\mathrm{new}} \mid D)$ differ from $p(Y \mid \mathrm{do}(A=a),D)$?
 
 ---
 
@@ -1596,13 +1170,7 @@ A02 provides the one-parameter foundation. A03 extends the same workflow to Gaus
 
 The conceptual transition is:
 
-$$
-\text{one probability parameter}
-\rightarrow
-\text{location and scale parameters}
-\rightarrow
-\text{regression parameters}
-$$
+$$ \text{one probability parameter} \rightarrow \text{location and scale parameters} \rightarrow \text{regression parameters} $$
 
 ---
 
@@ -1618,58 +1186,38 @@ Purpose:
 
 Main concept:
 
-$$
-\text{posterior support}
-=
-\text{paths compatible with assumptions and observations}
-$$
+$$ \text{posterior support} = \text{paths compatible with assumptions and observations} $$
 
 ### `02_globe_tossing_updating.r`
 
 Purpose:
 
 - samples water or land locations from a globe representation;
-- begins with a $\operatorname{Beta}(1,1)$ prior;
+- begins with a $\mathrm{Beta}(1,1)$ prior;
 - increments the beta shape parameters after each observation;
 - animates the posterior changing sequentially;
 - displays a posterior probability interval.
 
 Main update:
 
-$$
-a
-\leftarrow
-a+W_{\mathrm{new}}
-$$
+$$ a \leftarrow a+W_{\mathrm{new}} $$
 
-$$
-b
-\leftarrow
-b+L_{\mathrm{new}}
-$$
+$$ b \leftarrow b+L_{\mathrm{new}} $$
 
 ### `02_predictive_simulation.r`
 
 Purpose:
 
-- starts from the $\operatorname{Beta}(7,4)$ posterior;
+- starts from the $\mathrm{Beta}(7,4)$ posterior;
 - draws one possible $p$;
 - draws a nine-toss outcome conditional on that $p$;
 - accumulates draws into a posterior predictive distribution.
 
 Main simulation:
 
-$$
-p^{(s)}
-\sim
-\operatorname{Beta}(7,4)
-$$
+$$ p^{(s)} \sim \mathrm{Beta}(7,4) $$
 
-$$
-W_{\mathrm{new}}^{(s)}
-\sim
-\operatorname{Binomial}(9,p^{(s)})
-$$
+$$ W_{\mathrm{new}}^{(s)} \sim \mathrm{Binomial}(9,p^{(s)}) $$
 
 ---
 
@@ -1692,9 +1240,7 @@ Bayesian updating originates from counting possible paths through the garden of 
 - The **likelihood** $p(D \mid \theta)$ counts how many paths of observation are consistent with data $D$ given conjecture $\theta$.
 
 Multiplying prior paths by likelihood paths computes the total number of surviving paths consistent with both prior assumptions and current observations:
-$$
-\text{Total Surviving Paths}(\theta) = p(D \mid \theta) \times p(\theta)
-$$
+$$ \text{Total Surviving Paths}(\theta) = p(D \mid \theta) \times p(\theta) $$
 Multiplication compresses the step-by-step tree enumeration into a product. Normalization then divides each conjecture's path count by the total sum of all surviving paths across all conjectures, converting raw path counts into standardized posterior probabilities.
 
 #### Multi-Language Implementation Comparison Table (Question 1)
@@ -1707,7 +1253,7 @@ Multiplication compresses the step-by-step tree enumeration into a product. Norm
 | **Stan (C++ PPL)** | `p ~ beta(1,1); W ~ binomial(N, p);` | Declarative PPL blocks (`data`, `parameters`, `model`) compiled to C++ HMC/NUTS. |
 | **PyMC (Python PPL)** | `with pm.Model(): p = pm.Beta(...); w = pm.Binomial(..., observed=3)` | Context-manager DAG definition using PyTensor graphs and ArviZ InferenceData. |
 
-```{r}
+```r
 # R Code Demonstration: Multiplication as Compressed Path Counting
 grid <- seq(0, 1, length.out = 5)
 prior_paths <- c(1, 1, 1, 1, 1) # Uniform prior
@@ -1717,7 +1263,7 @@ posterior <- unnormalized_posterior / sum(unnormalized_posterior)
 print(data.frame(grid, prior_paths, likelihood_paths, unnormalized_posterior, posterior))
 ```
 
-```{python}
+```python
 # Python Code Demonstration
 import numpy as np
 
@@ -1734,7 +1280,7 @@ print("Unnormalized posterior:", unnormalized_posterior)
 print("Normalized posterior:  ", np.round(posterior, 4))
 ```
 
-```{python}
+```python
 # PyTorch Code Demonstration
 import torch
 
@@ -1747,7 +1293,7 @@ posterior = unnormalized_posterior / unnormalized_posterior.sum()
 print("PyTorch Posterior:", posterior)
 ```
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Code Demonstration: Binomial Model (Compressed Path Counting)
 data {
   int<lower=0> N;  // Total trial count (e.g., 4)
@@ -1762,7 +1308,7 @@ model {
 }
 ```
 
-```{python}
+```python
 # PyMC Code Demonstration: Binomial Model (Compressed Path Counting)
 import pymc as pm
 
@@ -1789,9 +1335,7 @@ with pm.Model() as model_q1:
 - $p(\theta \mid D)$ is the **posterior**: the probability density of parameter value $\theta$ given observed data $D$.
 
 Confusing these two is known as the *transposed conditional fallacy* (or prosecutor's fallacy). For instance, $\Pr(\text{Positive Medical Test} \mid \text{Rare Disease})$ may be $99\%$, but $\Pr(\text{Rare Disease} \mid \text{Positive Medical Test})$ might be less than $5\%$ if the disease is extremely rare. Bayes' theorem links the two by scaling the likelihood by the prior ratio:
-$$
-p(\theta \mid D) = p(D \mid \theta) \cdot \frac{p(\theta)}{p(D)}
-$$
+$$ p(\theta \mid D) = p(D \mid \theta) \cdot \frac{p(\theta)}{p(D)} $$
 
 ---
 
@@ -1808,27 +1352,21 @@ $$
 
 **Answer:**
 Under the assumption of independent and identically distributed (i.i.d.) Bernoulli trials, the probability of observing any specific sequence of $W$ waters and $L$ lands (where $N = W + L$) is:
-$$
-\Pr(\text{sequence} \mid p) = p^W (1-p)^L
-$$
+$$ \Pr(\text{sequence} \mid p) = p^W (1-p)^L $$
 Because real-number multiplication is commutative, the sequence order does not affect the likelihood product $p^W (1-p)^L$. The binomial coefficient $\binom{N}{W}$ counts the number of such permutations, but since it is a constant scaling factor across all candidate $p$ values, it cancels out upon normalization. Thus, the total count $W$ is a **sufficient statistic** for $p$.
 
 ---
 
-### Question 5: Starting from $\operatorname{Beta}(1,1)$, what posterior follows from six water and three land observations?
+### Question 5: Starting from $\mathrm{Beta}(1,1)$, what posterior follows from six water and three land observations?
 
 **Answer:**
 Using Beta-Binomial conjugacy:
-- Prior: $p \sim \operatorname{Beta}(\alpha_0, \beta_0) = \operatorname{Beta}(1,1)$ (Uniform prior).
+- Prior: $p \sim \mathrm{Beta}(\alpha_0, \beta_0) = \mathrm{Beta}(1,1)$ (Uniform prior).
 - Data: $W = 6$, $L = 3$ ($N = 9$).
 - Posterior: 
-  $$
-  \alpha_{\mathrm{post}} = \alpha_0 + W = 1 + 6 = 7
-  $$
-  $$
-  \beta_{\mathrm{post}} = \beta_0 + L = 1 + 3 = 4
-  $$
-  So the posterior distribution is $\operatorname{Beta}(7,4)$.
+$$ \alpha_{\mathrm{post}} = \alpha_0 + W = 1 + 6 = 7 $$
+$$ \beta_{\mathrm{post}} = \beta_0 + L = 1 + 3 = 4 $$
+  So the posterior distribution is $\mathrm{Beta}(7,4)$.
 
 #### Multi-Language Implementation Comparison Table (Question 5)
 
@@ -1840,7 +1378,7 @@ Using Beta-Binomial conjugacy:
 | **Stan (C++ PPL)** | `p ~ beta(1,1); W ~ binomial(9, p);` | Full MCMC sampling of posterior parameter $p$ with `generated quantities`. |
 | **PyMC (Python PPL)** | `with pm.Model(): p = pm.Beta("p",1,1); w = pm.Binomial("w",9,p,observed=6)` | NUTS MCMC sampling with automatic ArviZ summary extraction (`az.summary`). |
 
-```{r}
+```r
 # R Solution for Q5
 alpha_post <- 7; beta_post <- 4
 post_mean <- alpha_post / (alpha_post + beta_post) # 7/11 ≈ 0.6364
@@ -1848,7 +1386,7 @@ post_mode <- (alpha_post - 1) / (alpha_post + beta_post - 2) # 6/9 ≈ 0.6667
 cat(sprintf("Mean: %.4f, Mode: %.4f\n", post_mean, post_mode))
 ```
 
-```{python}
+```python
 # Python Solution for Q5
 alpha_post, beta_post = 7, 4
 post_mean = alpha_post / (alpha_post + beta_post)
@@ -1856,7 +1394,7 @@ post_mode = (alpha_post - 1) / (alpha_post + beta_post - 2)
 print(f"Mean: {post_mean:.4f}, Mode: {post_mode:.4f}")
 ```
 
-```{python}
+```python
 # PyTorch Solution for Q5
 import torch
 
@@ -1870,7 +1408,7 @@ print(
 )
 ```
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Solution for Question 5: Globe Tossing (6 Water, 3 Land)
 data {
   int<lower=0> N; // 9 tosses
@@ -1888,7 +1426,7 @@ generated quantities {
 }
 ```
 
-```{python}
+```python
 # PyMC Solution for Question 5
 import pymc as pm
 import arviz as az
@@ -1911,8 +1449,8 @@ print("PyMC Posterior Summary (Q5):\n", summary)
 ### Question 6: Why are the posterior mean and posterior mode different in the globe example?
 
 **Answer:**
-The posterior distribution $\operatorname{Beta}(7,4)$ is asymmetric (negatively skewed toward higher values of $p$).
-- **Mode:** The point of maximum probability density ($\operatorname{Mode} = \frac{7-1}{7+4-2} = \frac{6}{9} \approx 0.667$).
+The posterior distribution $\mathrm{Beta}(7,4)$ is asymmetric (negatively skewed toward higher values of $p$).
+- **Mode:** The point of maximum probability density ($\mathrm{Mode} = \frac{7-1}{7+4-2} = \frac{6}{9} \approx 0.667$).
 - **Mean:** The center of mass / expected value ($\mathbb{E}[p \mid D] = \frac{7}{7+4} = \frac{7}{11} \approx 0.636$).
 - **Median:** The 50th percentile ($\approx 0.652$).
 
@@ -1928,9 +1466,7 @@ Sequential updating and batch updating yield the **exact same final posterior di
 - **Sequential updating:** Condition on $d_1$ to obtain posterior $p(\theta \mid d_1)$, then use $p(\theta \mid d_1)$ as the prior to condition on $d_2$, and so on.
 
 Mathematically:
-$$
-p(\theta \mid d_1, d_2) \propto p(d_2 \mid \theta) \left[ p(d_1 \mid \theta) p(\theta) \right] = p(d_1, d_2 \mid \theta) p(\theta)
-$$
+$$ p(\theta \mid d_1, d_2) \propto p(d_2 \mid \theta) \left[ p(d_1 \mid \theta) p(\theta) \right] = p(d_1, d_2 \mid \theta) p(\theta) $$
 
 #### Multi-Language Implementation Comparison Table (Question 7)
 
@@ -1942,7 +1478,7 @@ $$
 | **Stan (C++ PPL)** | `p_batch ~ beta(1,1); p_seq ~ beta(7,1); 0 ~ binomial(3, p_seq);` | Multi-parameter Stan model running batch and sequential likelihoods in parallel. |
 | **PyMC (Python PPL)** | `with seq_model: p_seq = pm.Beta("p_seq", 7.0, 1.0); w = pm.Binomial(3, p_seq, observed=0)` | Sequential conditioning using Phase 1 posterior as prior for Phase 2. |
 
-```{r}
+```r
 # R Demonstration: Sequential vs Batch
 # Start Beta(1,1). Observation 1: 6 W. Observation 2: 3 L.
 # Batch: Beta(1+6, 1+3) = Beta(7,4)
@@ -1950,7 +1486,7 @@ $$
 cat("Identical parameters: Beta(7,4)\n")
 ```
 
-```{python}
+```python
 # Python Demonstration
 import scipy.stats as stats
 
@@ -1961,7 +1497,7 @@ seq_post = stats.beta(7, 4)
 print("Max difference in PDF grid:", np.max(np.abs(batch_post.pdf(np.linspace(0,1,100)) - seq_post.pdf(np.linspace(0,1,100)))))
 ```
 
-```{python}
+```python
 # PyTorch Demonstration
 import torch
 
@@ -1975,7 +1511,7 @@ print(
 )
 ```
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Demonstration: Sequential vs Batch Updating
 // Batch: Prior Beta(1,1) + Data (6 W, 3 L) -> Beta(7,4)
 // Sequential: Phase 1 posterior Beta(7,1) as Prior + Phase 2 Data (3 L) -> Beta(7,4)
@@ -2000,7 +1536,7 @@ model {
 }
 ```
 
-```{python}
+```python
 # PyMC Demonstration: Sequential vs Batch Updating
 import pymc as pm
 import arviz as az
@@ -2043,14 +1579,14 @@ This exponential explosion renders grid search completely infeasible for multi-p
 | **Stan (C++ PPL)** | `vector<lower=0, upper=1>[M] p; p ~ beta(2, 2);` | HMC/NUTS explores multi-dimensional continuous spaces without evaluating grids. |
 | **PyMC (Python PPL)** | `with high_dim_model: p = pm.Beta("p", 2.0, 2.0, shape=10)` | Vectorized NUTS sampling over 10D posterior space using PyTensor. |
 
-```{r}
+```r
 # R Code: Grid size growth
 M <- 1:10; K <- 100
 grid_sizes <- K^M
 data.frame(Parameters = M, GridPoints = grid_sizes)
 ```
 
-```{python}
+```python
 # Python Code
 M = np.arange(1, 11)
 grid_sizes = 100**M
@@ -2058,14 +1594,14 @@ for m, size in zip(M, grid_sizes):
   print(f"Params: {m:2d} -> Grid Points: {size:.1e}")
 ```
 
-```{python}
+```python
 # PyTorch Code
 params = torch.arange(1, 11)
 grid_points = 100.0**params
 print("PyTorch Grid sizes for 1..10 params:", grid_points)
 ```
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Demonstration: High-Dimensional MCMC Sampling
 // Demonstrates how Hamiltonian Monte Carlo avoids grid explosion (K^M)
 data {
@@ -2079,7 +1615,7 @@ model {
 }
 ```
 
-```{python}
+```python
 # PyMC Demonstration: High-Dimensional MCMC Sampling
 import pymc as pm
 
@@ -2114,9 +1650,7 @@ This loss of information causes downstream decision-making and forecasting to be
 A posterior distribution describes how plausible different parameter values are; it does not automatically select one best decision number. Choosing a single point estimate $d$ requires defining a **loss function** $L(d, \theta)$ that specifies the economic, physical, or operational cost of choosing decision $d$ when the true parameter value is $\theta$.
 
 The optimal decision $d^*$ minimizes the **expected posterior loss**:
-$$
-d^* = \arg\min_d \mathbb{E}[L(d, \theta) \mid D] = \arg\min_d \int L(d, \theta) p(\theta \mid D) \, d\theta
-$$
+$$ d^* = \arg\min_d \mathbb{E}[L(d, \theta) \mid D] = \arg\min_d \int L(d, \theta) p(\theta \mid D) \, d\theta $$
 - **Absolute loss ($L = |d - \theta|$):** Optimal decision is the **posterior median**.
 - **Squared loss ($L = (d - \theta)^2$):** Optimal decision is the **posterior mean**.
 - **0-1 loss ($L = 0$ if $d=\theta$ else $1$):** Optimal decision is the **posterior mode**.
@@ -2131,7 +1665,7 @@ $$
 | **Stan (C++ PPL)** | `generated quantities { real p_draw = p; }` | Extracts MCMC draws for external expected loss optimization. |
 | **PyMC (Python PPL)** | `p_draws = idata_loss.posterior["p"].values.flatten()` | ArviZ InferenceData posterior array extraction for expected loss minimization. |
 
-```{r}
+```r
 # R Code: Expected loss minimization for Beta(7,4)
 samples <- rbeta(1e5, 7, 4)
 d_grid <- seq(0, 1, length.out = 500)
@@ -2142,7 +1676,7 @@ cat("Optimal d under absolute loss (median):", d_grid[which.min(abs_loss)], "\n"
 cat("Optimal d under squared loss (mean):   ", d_grid[which.min(sq_loss)], "\n")
 ```
 
-```{python}
+```python
 # Python Code
 p_samples = np.random.beta(7, 4, size=100000)
 d_grid = np.linspace(0, 1, 500)
@@ -2153,7 +1687,7 @@ print(f"Optimal d (Absolute Loss): {d_grid[np.argmin(abs_loss)]:.4f}")
 print(f"Optimal d (Squared Loss):  {d_grid[np.argmin(sq_loss)]:.4f}")
 ```
 
-```{python}
+```python
 # PyTorch Code
 beta_dist = torch.distributions.Beta(7.0, 4.0)
 p_samples = beta_dist.sample((100000,))
@@ -2170,7 +1704,7 @@ print(
 print(f"PyTorch d* (Squared Loss):  {d_grid[torch.argmin(sq_loss)].item():.4f}")
 ```
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Code Demonstration: Generated Quantities for Loss Evaluation
 data {
   int<lower=0> N; // 9
@@ -2189,7 +1723,7 @@ generated quantities {
 }
 ```
 
-```{python}
+```python
 # PyMC Code Demonstration: Expected Loss Minimization
 import pymc as pm
 import numpy as np
@@ -2218,9 +1752,7 @@ print(f"PyMC Optimal d (Squared Loss/Mean):   {d_grid[np.argmin(sq_loss)]:.4f}")
 2. **Observation uncertainty (Sampling variation):** Even if $\theta$ were known with $100\%$ certainty, future observation outcomes $\widetilde{Y}$ remain inherently random, governed by the data-generating process $p(\widetilde{Y} \mid \theta)$.
 
 The posterior predictive distribution integrates over both sources of uncertainty:
-$$
-p(\widetilde{Y} \mid D) = \int p(\widetilde{Y} \mid \theta) \, p(\theta \mid D) \, d\theta
-$$
+$$ p(\widetilde{Y} \mid D) = \int p(\widetilde{Y} \mid \theta) \, p(\theta \mid D) \, d\theta $$
 
 #### Multi-Language Implementation Comparison Table (Question 11)
 
@@ -2229,7 +1761,7 @@ $$
 | **Stan (C++ PPL)** | `generated quantities { int W_pred = binomial_rng(N_pred, p); }` | Inline `rng` prediction inside Stan execution block integrating $p(\theta \mid D)$ and $p(\widetilde{Y} \mid \theta)$. |
 | **PyMC (Python PPL)** | `post_pred = pm.sample_posterior_predictive(idata)` | Post-processing graph execution sampling outcome nodes given posterior draws. |
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Code Demonstration: Posterior Predictive Sampling
 // Propagates parameter uncertainty (p) and observation uncertainty (W_pred)
 data {
@@ -2250,7 +1782,7 @@ generated quantities {
 }
 ```
 
-```{python}
+```python
 # PyMC Code Demonstration: Posterior Predictive Sampling
 import pymc as pm
 
@@ -2273,14 +1805,10 @@ print("Posterior Predictive Samples shape:", post_pred.posterior_predictive["w_o
 
 **Answer:**
 - **Prior Predictive Distribution:** Simulates future data $\widetilde{Y}$ before observing current data $D$, propagating uncertainty from the **prior** $p(\theta)$:
-  $$
-  p(\widetilde{Y}) = \int p(\widetilde{Y} \mid \theta) \, p(\theta) \, d\theta
-  $$
+$$ p(\widetilde{Y}) = \int p(\widetilde{Y} \mid \theta) \, p(\theta) \, d\theta $$
   It answers: *"What observations does the model deem plausible based purely on domain knowledge and initial assumptions?"*
 - **Posterior Predictive Distribution:** Simulates future data $\widetilde{Y}$ after observing current data $D$, propagating uncertainty from the **posterior** $p(\theta \mid D)$:
-  $$
-  p(\widetilde{Y} \mid D) = \int p(\widetilde{Y} \mid \theta) \, p(\theta \mid D) \, d\theta
-  $$
+$$ p(\widetilde{Y} \mid D) = \int p(\widetilde{Y} \mid \theta) \, p(\theta \mid D) \, d\theta $$
   It answers: *"What observations does the fitted model expect to see in future trials?"*
 
 #### Multi-Language Implementation Comparison Table (Question 12)
@@ -2290,7 +1818,7 @@ print("Posterior Predictive Samples shape:", post_pred.posterior_predictive["w_o
 | **Stan (C++ PPL)** | `generated quantities { int W_prior_pred = binomial_rng(N_tosses, p); }` | Prior predictive simulation generated before observing data. |
 | **PyMC (Python PPL)** | `prior_pred = pm.sample_prior_predictive()` vs `pm.sample_posterior_predictive()` | Explicit API functions for prior predictive (unconditioned) vs posterior predictive (conditioned). |
 
-```{stan, output.var="stan_model"}
+```stan
 // Stan Code Demonstration: Prior Predictive vs Posterior Predictive Simulation
 data {
   int<lower=0> N_tosses; // 9
@@ -2307,7 +1835,7 @@ generated quantities {
 }
 ```
 
-```{python}
+```python
 # PyMC Code Demonstration: Prior Predictive vs Posterior Predictive
 import pymc as pm
 
@@ -2332,7 +1860,7 @@ print("Prior Pred Mean W:", float(prior_pred.prior_predictive["w_obs"].mean()),
 
 **Answer:**
 Predictive accuracy relies on **correlation and statistical association**, whereas causal inference requires modeling the **true data-generating physical mechanism**.
-A statistically flexible model can capture surface correlations (or confounding paths) to accurately predict $Y$ from $X$ under passive observation. However, if $X$ does not causally produce $Y$ (e.g., $X$ and $Y$ are co-confounded by an unobserved variable $Z$), intervening on $X$ ($\operatorname{do}(X=x)$) will fail to change $Y$. A model can be predictively accurate in the small world of passive data while being completely wrong under active intervention.
+A statistically flexible model can capture surface correlations (or confounding paths) to accurately predict $Y$ from $X$ under passive observation. However, if $X$ does not causally produce $Y$ (e.g., $X$ and $Y$ are co-confounded by an unobserved variable $Z$), intervening on $X$ ($\mathrm{do}(X=x)$) will fail to change $Y$. A model can be predictively accurate in the small world of passive data while being completely wrong under active intervention.
 
 ---
 
@@ -2362,13 +1890,13 @@ This allows decision-makers to optimize strategies using expected utility rather
 
 ---
 
-### Question 16: How does $p(Y_{\mathrm{new}} \mid D)$ differ from $p(Y \mid \operatorname{do}(A=a),D)$?
+### Question 16: How does $p(Y_{\mathrm{new}} \mid D)$ differ from $p(Y \mid \mathrm{do}(A=a),D)$?
 
 **Answer:**
 - $p(Y_{\mathrm{new}} \mid D)$ is the **observational posterior predictive distribution**: It forecasts future outcomes $Y_{\mathrm{new}}$ under passive observation of the ongoing system.
-- $p(Y \mid \operatorname{do}(A=a),D)$ is the **interventional distribution**: It predicts the outcome $Y$ when treatment variable $A$ is actively set to value $a$ by external action, severing all incoming causal arrows into $A$ in the Directed Acyclic Graph (DAG).
+- $p(Y \mid \mathrm{do}(A=a),D)$ is the **interventional distribution**: It predicts the outcome $Y$ when treatment variable $A$ is actively set to value $a$ by external action, severing all incoming causal arrows into $A$ in the Directed Acyclic Graph (DAG).
 
-Unless there is no confounding between $A$ and $Y$, the observational prediction $p(Y_{\mathrm{new}} \mid D)$ will not equal the interventional prediction $p(Y \mid \operatorname{do}(A=a),D)$.
+Unless there is no confounding between $A$ and $Y$, the observational prediction $p(Y_{\mathrm{new}} \mid D)$ will not equal the interventional prediction $p(Y \mid \mathrm{do}(A=a),D)$.
 
 ---
 
@@ -2386,36 +1914,24 @@ Unless there is no confounding between $A$ and $Y$, the observational prediction
 
 #### Model Specification
 - **Parameter:** $p \in [0,1]$, the proportion of Earth's surface covered by water.
-- **Prior:** Uniform distribution over $[0,1]$, equivalent to $p \sim \operatorname{Beta}(1,1)$.
-- **Likelihood:** $W \mid p, N=14 \sim \operatorname{Binomial}(14, p)$.
+- **Prior:** Uniform distribution over $[0,1]$, equivalent to $p \sim \mathrm{Beta}(1,1)$.
+- **Likelihood:** $W \mid p, N=14 \sim \mathrm{Binomial}(14, p)$.
 
 #### Conjugate Analytical Derivation
 By Bayes' theorem and Beta-Binomial conjugacy:
-$$
-p(p \mid W=3, L=11) \propto p(W=3 \mid p, N=14) \cdot p(p)
-$$
-$$
-p(p \mid D) \propto \left[ \binom{14}{3} p^3 (1-p)^{11} \right] \cdot \left[ 1 \right] \propto p^{4-1} (1-p)^{12-1}
-$$
+$$ p(p \mid W=3, L=11) \propto p(W=3 \mid p, N=14) \cdot p(p) $$
+$$ p(p \mid D) \propto \left[ \binom{14}{3} p^3 (1-p)^{11} \right] \cdot \left[ 1 \right] \propto p^{4-1} (1-p)^{12-1} $$
 
 Thus, the exact analytical posterior distribution is:
-$$
-p \mid D \sim \operatorname{Beta}(\alpha_{\mathrm{post}}, \beta_{\mathrm{post}}) = \operatorname{Beta}(4, 12)
-$$
+$$ p \mid D \sim \mathrm{Beta}(\alpha_{\mathrm{post}}, \beta_{\mathrm{post}}) = \mathrm{Beta}(4, 12) $$
 
 #### Key Posterior Summaries
 - **Posterior Mean:**
-  $$
-  \mathbb{E}[p \mid D] = \frac{\alpha_{\mathrm{post}}}{\alpha_{\mathrm{post}} + \beta_{\mathrm{post}}} = \frac{4}{4 + 12} = \frac{4}{16} = 0.2500
-  $$
+$$ \mathbb{E}[p \mid D] = \frac{\alpha_{\mathrm{post}}}{\alpha_{\mathrm{post}} + \beta_{\mathrm{post}}} = \frac{4}{4 + 12} = \frac{4}{16} = 0.2500 $$
 - **Posterior Mode (MAP):**
-  $$
-  \operatorname{Mode}(p \mid D) = \frac{\alpha_{\mathrm{post}} - 1}{\alpha_{\mathrm{post}} + \beta_{\mathrm{post}} - 2} = \frac{3}{14} \approx 0.2143
-  $$
+$$ \mathrm{Mode}(p \mid D) = \frac{\alpha_{\mathrm{post}} - 1}{\alpha_{\mathrm{post}} + \beta_{\mathrm{post}} - 2} = \frac{3}{14} \approx 0.2143 $$
 - **Posterior Variance:**
-  $$
-  \operatorname{Var}(p \mid D) = \frac{\alpha \beta}{(\alpha+\beta)^2(\alpha+\beta+1)} = \frac{4 \times 12}{16^2 \times 17} = \frac{48}{4352} \approx 0.01103 \implies \text{SD} \approx 0.1050
-  $$
+$$ \mathrm{Var}(p \mid D) = \frac{\alpha \beta}{(\alpha+\beta)^2(\alpha+\beta+1)} = \frac{4 \times 12}{16^2 \times 17} = \frac{48}{4352} \approx 0.01103 \implies \text{SD} \approx 0.1050 $$
 
 ---
 
@@ -2424,9 +1940,7 @@ $$
 #### Exact Analytical Beta-Binomial Distribution
 For $\widetilde{N} = 5$ future tosses, let $\widetilde{W} \in \{0, 1, 2, 3, 4, 5\}$ be the number of water observations.
 The exact marginal predictive probability for $\widetilde{W} = k$ is given by the Beta-Binomial probability density:
-$$
-\Pr(\widetilde{W} = k \mid D) = \binom{\widetilde{N}}{k} \frac{\mathrm{B}(\alpha_{\mathrm{post}} + k, \beta_{\mathrm{post}} + \widetilde{N} - k)}{\mathrm{B}(\alpha_{\mathrm{post}}, \beta_{\mathrm{post}})}
-$$
+$$ \Pr(\widetilde{W} = k \mid D) = \binom{\widetilde{N}}{k} \frac{\mathrm{B}(\alpha_{\mathrm{post}} + k, \beta_{\mathrm{post}} + \widetilde{N} - k)}{\mathrm{B}(\alpha_{\mathrm{post}}, \beta_{\mathrm{post}})} $$
 where $\mathrm{B}(a,b) = \frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}$ is the Beta function.
 
 #### Exact Analytical Probabilities Table
@@ -2446,7 +1960,7 @@ where $\mathrm{B}(a,b) = \frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}$ is the Beta fun
 
 #### R Code Solution
 
-```{r}
+```r
 # ==============================================================================
 # Homework A02 - R Solution (Grid Approximation, Sampling & Prediction)
 # ==============================================================================
@@ -2488,7 +2002,7 @@ print(round(exact_probs_r, 5))
 
 #### Python Code Solution (NumPy / SciPy)
 
-```{python}
+```python
 # ==============================================================================
 # Homework A02 - Python Solution (NumPy & SciPy)
 # ==============================================================================
@@ -2541,7 +2055,7 @@ for k in range(6):
 
 #### PyTorch Code Solution
 
-```{python}
+```python
 # ==============================================================================
 # Homework A02 - PyTorch Solution (Tensor-Based Bayesian Workflow)
 # ==============================================================================
@@ -2591,7 +2105,7 @@ for k in range(6):
 
 #### Stan Code Solution
 
-```{stan, output.var="stan_model"}
+```stan
 // ==============================================================================
 // Homework A02 - Stan Solution (Posterior & Posterior Predictive)
 // ==============================================================================
@@ -2617,7 +2131,7 @@ generated quantities {
 
 #### PyMC Code Solution
 
-```{python}
+```python
 # ==============================================================================
 # Homework A02 - PyMC Solution (Complete MCMC & Predictive Workflow)
 # ==============================================================================

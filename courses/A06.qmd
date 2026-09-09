@@ -496,7 +496,7 @@ There is no arrow from $X$ to $Y$.
 
 Marginally, $\mathrm{Cor}(X,Y) \neq 0$. Within strata of $Z$, $\mathrm{Cor}(X,Y \mid Z=z) \approx 0$.
 
-```r
+```{r}
 #| label: fig-fork-sim
 #| fig-cap: "Fork simulation: Marginal vs conditional correlation under X <- Z -> Y"
 set.seed(123)
@@ -624,7 +624,7 @@ $$ X \rightarrow Z \rightarrow Y $$
 
 $$ X \sim \mathrm{Bernoulli}(0.5), \quad Z \sim \mathrm{Bernoulli}(0.1 + 0.8X), \quad Y \sim \mathrm{Bernoulli}(0.1 + 0.8Z) $$
 
-```r
+```{r}
 #| label: fig-pipe-sim
 #| fig-cap: "Pipe simulation: Total effect vs mediator-conditioned effect"
 set.seed(123)
@@ -750,7 +750,7 @@ The official script generates independent $X$ and $Y$ and makes $Z$ likely when 
 
 $$ X \sim \mathrm{Bernoulli}(0.5), \quad Y \sim \mathrm{Bernoulli}(0.5), \quad Z \sim \mathrm{Bernoulli} \left[ \text{ifelse}(X+Y>0, 0.9, 0.2) \right] $$
 
-```r
+```{r}
 #| label: fig-collider-sim
 #| fig-cap: "Collider simulation: Unconditioned independence vs conditioned association"
 set.seed(123)
@@ -880,7 +880,7 @@ $$ S_i = N_i + T_i $$
 
 Only proposals in the top 10% of total score $S_i$ are selected.
 
-```r
+```{r}
 #| label: fig-grant-proposals
 #| fig-cap: "Grant proposal selection distortion: Negative correlation induced among selected proposals"
 set.seed(1914)
@@ -1032,7 +1032,7 @@ where $A$ is age, $H$ is happiness, and $M$ is marriage status.
 
 If age and happiness are otherwise independent, the collider $M$ blocks the path marginally. Conditioning on marriage status opens it.
 
-```r
+```{r}
 #| label: fig-happiness-sim
 #| fig-cap: "Happiness, age, and marriage: Conditioning on marriage status distorts the age-happiness relationship"
 library(rethinking)
@@ -1188,7 +1188,7 @@ $$ G \rightarrow P \leftarrow U \rightarrow C $$
 
 Conditioning on $P$ opens this path. Even though the true direct effect of $G$ on $C$ is zero, a regression of $C$ on both $G$ and $P$ estimates a non-zero coefficient for $G$.
 
-```r
+```{r}
 #| label: fig-haunted-dag
 #| fig-cap: "The Haunted DAG: Conditioning on parent education P opens backdoor through unobserved U"
 library(rethinking)
@@ -1472,7 +1472,7 @@ $$ \tau^{(s)} = \overline{\mu}^{(s)}(x_1) - \overline{\mu}^{(s)}(x_0) $$
 
 The book uses `dagitty` to inspect adjustment sets.
 
-```r
+```{r}
 #| label: fig-dagitty-demo
 #| fig-cap: "Using dagitty in R to identify minimal adjustment sets"
 library(dagitty)
@@ -1877,7 +1877,7 @@ In the model $Y \sim X + Z + A$:
 
 ### Multi-Language Homework Implementation
 
-```r
+```{r}
 #| label: fig-homework-a06
 #| fig-cap: "Homework A06 Simulation & Model Estimation"
 library(rethinking)

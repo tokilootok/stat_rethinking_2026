@@ -223,7 +223,9 @@ $$ X \rightarrow Z, \quad U \rightarrow Z, \quad U \rightarrow Y $$
 
 with a possible path $Z \rightarrow Y$.
 
-```r
+```{r}
+#| label: fig-bad-control-1
+#| fig-cap: "Bad Control 1: Post-treatment confounding simulation"
 set.seed(123)
 f_post <- function(n=100, bXZ=1, bZY=0) {
   X <- rnorm(n)
@@ -369,7 +371,9 @@ When $\beta_{ZY}\neq 0$, $Z$ is also a mediator ($X \rightarrow Z \rightarrow Y$
 
 The second official simulation uses $X \rightarrow Y \rightarrow Z$:
 
-```r
+```{r}
+#| label: fig-bad-control-2
+#| fig-cap: "Bad Control 2: Case-control / outcome-descendant bias simulation"
 set.seed(123)
 f_case <- function(n=100, bXY=1, bYZ=1) {
   X <- rnorm(n)
@@ -499,7 +503,9 @@ In predictive modeling, an outcome descendant may dramatically improve apparent 
 
 The third official simulation has $Z \rightarrow X \rightarrow Y$:
 
-```r
+```{r}
+#| label: fig-bad-control-3
+#| fig-cap: "Bad Control 3: Precision parasite simulation"
 set.seed(123)
 f_parasite <- function(n=50, bZX=1, bXY=1) {
   Z <- rnorm(n)
@@ -635,7 +641,9 @@ The fourth official simulation adds an unobserved common cause $U$:
 
 $$ Z \rightarrow X \leftarrow U \rightarrow Y, \quad X \rightarrow Y $$
 
-```r
+```{r}
+#| label: fig-bad-control-4
+#| fig-cap: "Bad Control 4: Bias amplifier simulation"
 set.seed(123)
 f_amp <- function(n=100, bZX=1, bXY=0) {
   Z <- rnorm(n)
@@ -838,7 +846,9 @@ Overfitting is fitting sample noise. Bad-control bias is estimating the wrong st
 
 Polynomial models of increasing degree fit training noise better, lowering in-sample error while degrading out-of-sample prediction.
 
-```r
+```{r}
+#| label: fig-overfitting-demo
+#| fig-cap: "Polynomial overfitting demo: High-degree polynomials overfit in-sample"
 set.seed(123)
 N <- 15
 x <- seq(-2, 2, length.out=N)
@@ -1128,7 +1138,7 @@ Let's list all paths connecting exposure $F$ (avgfood) and outcome $W$ (weight):
 
 ### Multi-Language Homework Implementation
 
-```r
+```{r}
 #| label: fig-homework-a07
 #| fig-cap: "Homework A07: Foxes Total Effect vs Direct Effect Models"
 library(rethinking)

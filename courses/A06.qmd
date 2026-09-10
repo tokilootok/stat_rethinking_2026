@@ -10,6 +10,8 @@ format:
     code-fold: show
     code-tools: true
     theme: cosmo
+    mermaid:
+      theme: default
 execute:
   eval: true
   warning: false
@@ -46,18 +48,25 @@ knitr:
   - [5.1 Marginal association](#51-marginal-association)
   - [5.2 Conditioning on the common cause](#52-conditioning-on-the-common-cause)
   - [5.3 Simulation in the official script](#53-simulation-in-the-official-script)
+  - [5.4 Implementation (R, PyMC, Stan, PyTorch)](#54-implementation-r-pymc-stan-pytorch)
 - [6. The pipe](#6-the-pipe)
   - [6.1 Unconditioned path](#61-unconditioned-path)
   - [6.2 Conditioning on the mediator](#62-conditioning-on-the-mediator)
   - [6.3 Total versus direct effect](#63-total-versus-direct-effect)
+  - [6.4 Implementation (R, PyMC, Stan, PyTorch)](#64-implementation-r-pymc-stan-pytorch)
 - [7. The collider](#7-the-collider)
   - [7.1 Unconditioned collider](#71-unconditioned-collider)
   - [7.2 Conditioning on the collider](#72-conditioning-on-the-collider)
   - [7.3 Intuition](#73-intuition)
+  - [7.4 Implementation (R, PyMC, Stan, PyTorch)](#74-implementation-r-pymc-stan-pytorch)
 - [8. Collider bias is created, not removed](#8-collider-bias-is-created-not-removed)
+  - [8.1 Implementation (R, PyMC, Stan, PyTorch)](#81-implementation-r-pymc-stan-pytorch)
 - [9. Descendants](#9-descendants)
+  - [9.1 Implementation (R, PyMC, Stan, PyTorch)](#91-implementation-r-pymc-stan-pytorch)
 - [10. D-separation](#10-d-separation)
+  - [10.1 Implementation (R, PyMC, Stan, PyTorch)](#101-implementation-r-pymc-stan-pytorch)
 - [11. Causal paths and backdoor paths](#11-causal-paths-and-backdoor-paths)
+  - [11.1 Implementation (R, PyMC, Stan, PyTorch)](#111-implementation-r-pymc-stan-pytorch)
 - [12. The backdoor-analysis recipe](#12-the-backdoor-analysis-recipe)
 - [13. Confounding is a path problem](#13-confounding-is-a-path-problem)
 - [14. Fork simulation](#14-fork-simulation)
@@ -175,16 +184,47 @@ A **path** is any sequence of connected edges between two variables, ignoring ar
 
 Suppose the exposure is $X$ and the outcome is $Y$.
 
-A path can transmit statistical association when it is open.
+A path can transmit statistical association when it is **open**. A path is **blocked** when its structure and conditioning status prevent information from flowing through it.
 
-A path is blocked when its structure and conditioning status prevent information from flowing through it.
+The elementary structures and their path-blocking rules are summarized in the Mermaid diagram below:
+
+```{mermaid}
+%%| label: fig-paths-flow
+%%| fig-cap: "Elementary path structures and blocking conditions"
+flowchart TD
+    subgraph Fork["1. The Fork: X <- Z -> Y"]
+        direction LR
+        F1["X"] <--- F2["Z"] ---> F3["Y"]
+        F4["X"] -.- F5["Z (conditioned)"] -.- F6["Y"]
+    end
+
+    subgraph Pipe["2. The Pipe: X -> Z -> Y"]
+        direction LR
+        P1["X"] ---> P2["Z"] ---> P3["Y"]
+        P4["X"] -.- P5["Z (conditioned)"] -.- P6["Y"]
+    end
+
+    subgraph Collider["3. The Collider: X -> Z <- Y"]
+        direction LR
+        C1["X"] -.- C2["Z"] -.- C3["Y"]
+        C4["X"] ---> C5["Z (conditioned)"] <--- C6["Y"]
+    end
+
+    subgraph Descendant["4. Collider Descendant: Z -> D"]
+        direction LR
+        D1["X"] -.- D2["Z"] -.- D3["Y"]
+        D2 -.- D4["D"]
+        D5["X"] ---> D6["Z"] <--- D7["Y"]
+        D6 ---> D8["D (conditioned)"]
+    end
+```
 
 The elementary structures are:
 
-1. fork;
-2. pipe;
-3. collider;
-4. descendant of another node, especially a collider.
+1. **Fork** ($X \leftarrow Z \rightarrow Y$): Open by default; blocked when conditioning on common cause $Z$.
+2. **Pipe** ($X \rightarrow Z \rightarrow Y$): Open by default; blocked when conditioning on mediator $Z$.
+3. **Collider** ($X \rightarrow Z \leftarrow Y$): Blocked by default; opened when conditioning on collider $Z$.
+4. **Descendant of a Collider** ($Z \rightarrow D$): Blocked by default; partially opened when conditioning on descendant $D$.
 
 Every larger DAG can be analyzed by decomposing its paths into these local structures.
 
@@ -223,6 +263,104 @@ and makes both $X$ and $Y$ strongly depend on $Z$.
 Marginally, $X$ and $Y$ are correlated. Within $Z=0$ and within $Z=1$, the correlation largely disappears.
 
 The adjustment works because $Z$ blocks an open backdoor path.
+
+### 5.4 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+Z <- rbern(n, 0.5)
+X <- rbern(n, (1 - Z) * 0.1 + Z * 0.9)
+Y <- rbern(n, (1 - Z) * 0.1 + Z * 0.9)
+
+# Marginal model: Y ~ X (spurious association created by common cause Z)
+m_marginal <- lm(Y ~ X)
+summary(m_marginal)
+
+# Conditional model: Y ~ X + Z (backdoor path closed by Z)
+m_cond <- lm(Y ~ X + Z)
+summary(m_cond)
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+Z_data = np.random.binomial(1, 0.5, size=n)
+X_data = np.random.binomial(1, (1 - Z_data) * 0.1 + Z_data * 0.9)
+Y_data = np.random.binomial(1, (1 - Z_data) * 0.1 + Z_data * 0.9)
+
+with pm.Model() as model_fork:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bX = pm.Normal("bX", mu=0, sigma=1)
+    bZ = pm.Normal("bZ", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bX * X_data + bZ * Z_data
+    y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=Y_data)
+    
+    idata_fork = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_fork, var_names=["bX", "bZ"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] Y;
+  vector[N] Z;
+}
+parameters {
+  real a;
+  real bX;
+  real bZ;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bZ ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bZ * Z, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+Z_t = torch.bernoulli(torch.full((n, 1), 0.5))
+X_t = torch.bernoulli((1 - Z_t) * 0.1 + Z_t * 0.9)
+Y_t = torch.bernoulli((1 - Z_t) * 0.1 + Z_t * 0.9)
+
+# Regress Y on X and Z
+inputs = torch.cat([X_t, Z_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, Y_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Fork weights [bX, bZ]:", model.weight.data.numpy())
+```
+:::
 
 ---
 
@@ -272,6 +410,107 @@ $$ \text{blocking a path} \neq \text{removing bias automatically} $$
 
 It may remove part of the effect we intended to estimate.
 
+### 6.4 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+# Treatment T
+T <- rbern(n, 0.5)
+# Fungus F (mediator: present if T=0 mostly)
+F <- rbern(n, (1 - T) * 0.8 + T * 0.1)
+# Plant height H (fungus reduces height)
+H <- rnorm(n, mean = 10 - 3 * F, sd = 1)
+
+# Total effect model: H ~ T (recovers full causal pathway T -> F -> H)
+m_total <- lm(H ~ T)
+summary(m_total)
+
+# Direct effect model: H ~ T + F (blocks mediator pipe F)
+m_direct <- lm(H ~ T + F)
+summary(m_direct)
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+T_data = np.random.binomial(1, 0.5, size=n)
+F_data = np.random.binomial(1, (1 - T_data) * 0.8 + T_data * 0.1)
+H_data = np.random.normal(loc=10 - 3 * F_data, scale=1.0)
+
+with pm.Model() as model_pipe:
+    a = pm.Normal("a", mu=10, sigma=2)
+    bT = pm.Normal("bT", mu=0, sigma=1)
+    bF = pm.Normal("bF", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bT * T_data + bF * F_data
+    h_obs = pm.Normal("h_obs", mu=mu, sigma=sigma, observed=H_data)
+    
+    idata_pipe = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_pipe, var_names=["bT", "bF"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] T;
+  vector[N] F;
+  vector[N] H;
+}
+parameters {
+  real a;
+  real bT;
+  real bF;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(10, 2);
+  bT ~ normal(0, 1);
+  bF ~ normal(0, 1);
+  sigma ~ exponential(1);
+  H ~ normal(a + bT * T + bF * F, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+T_t = torch.bernoulli(torch.full((n, 1), 0.5))
+F_t = torch.bernoulli((1 - T_t) * 0.8 + T_t * 0.1)
+H_t = torch.normal(mean=10.0 - 3.0 * F_t, std=1.0)
+
+# Direct effect estimation (conditioning on mediator F)
+inputs = torch.cat([T_t, F_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, H_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Pipe Direct Effect [bT, bF]:", model.weight.data.numpy())
+```
+:::
+
 ---
 
 ## 7. The collider
@@ -308,6 +547,109 @@ The causes become associated inside the selected group even when they were indep
 
 This is selection distortion.
 
+### 7.4 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+N_val <- rnorm(n, 0, 1)
+T_val <- rnorm(n, 0, 1)
+S_score <- N_val + T_val
+selected <- S_score > quantile(S_score, 0.90)
+
+# Unconditioned model in full population (independent N _||_ T)
+cat("Full sample correlation Cor(N, T):", round(cor(N_val, T_val), 3), "\n")
+m_full <- lm(T_val ~ N_val)
+
+# Conditioned on collider (selected sample: spurious negative correlation)
+cat("Selected sample correlation Cor(N, T | S=1):", round(cor(N_val[selected], T_val[selected]), 3), "\n")
+m_selected <- lm(T_val[selected] ~ N_val[selected])
+summary(m_selected)
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+N_val = np.random.normal(0, 1, size=n)
+T_val = np.random.normal(0, 1, size=n)
+S_score = N_val + T_val
+selected = S_score > np.quantile(S_score, 0.90)
+
+N_sel = N_val[selected]
+T_sel = T_val[selected]
+
+with pm.Model() as model_collider:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bN = pm.Normal("bN", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bN * N_sel
+    t_obs = pm.Normal("t_obs", mu=mu, sigma=sigma, observed=T_sel)
+    
+    idata_collider = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_collider, var_names=["bN"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N_sel;
+  vector[N_sel] N_val;
+  vector[N_sel] T_val;
+}
+parameters {
+  real a;
+  real bN;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bN ~ normal(0, 1);
+  sigma ~ exponential(1);
+  T_val ~ normal(a + bN * N_val, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+N_t = torch.randn(n, 1)
+T_t = torch.randn(n, 1)
+S_score = N_t + T_t
+threshold = torch.quantile(S_score, 0.90)
+mask = (S_score > threshold).squeeze()
+
+N_sel = N_t[mask]
+T_sel = T_t[mask]
+
+model = nn.Linear(1, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(N_sel)
+    loss = criterion(preds, T_sel)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch weight bN on selected sample:", model.weight.data.numpy()[0][0])
+```
+:::
+
 ---
 
 ## 8. Collider bias is created, not removed
@@ -333,6 +675,113 @@ Conditioning on $Z$ opens the path.
 This is why variable selection cannot be based on correlation, predictive strength, or temporal proximity alone.
 
 The arrow structure matters.
+
+### 8.1 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+# Age between 18 and 65
+A <- runif(n, 18, 65)
+# Happiness unassociated with Age
+H <- rnorm(n, 0, 1)
+# Marriage probability increases with Age and Happiness (A -> M <- H)
+p_married <- logistic(-2 + 0.08 * (A - 18) + 1.5 * H)
+M <- rbern(n, p_married)
+
+# True model without conditioning on collider M (slope for Age is zero)
+m_true <- lm(H ~ A)
+summary(m_true)
+
+# Confounded model conditioning on collider M (creates false negative association)
+m_collider <- lm(H ~ A + factor(M))
+summary(m_collider)
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+from scipy.special import expit
+
+np.random.seed(123)
+n = 1000
+A_data = np.random.uniform(18, 65, size=n)
+H_data = np.random.normal(0, 1, size=n)
+p_married = expit(-2 + 0.08 * (A_data - 18) + 1.5 * H_data)
+M_data = np.random.binomial(1, p_married)
+
+with pm.Model() as model_marriage:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bA = pm.Normal("bA", mu=0, sigma=1)
+    bM = pm.Normal("bM", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bA * (A_data - 18) + bM * M_data
+    h_obs = pm.Normal("h_obs", mu=mu, sigma=sigma, observed=H_data)
+    
+    idata_m = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_m, var_names=["bA", "bM"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] A;
+  vector[N] M;
+  vector[N] H;
+}
+parameters {
+  real a;
+  real bA;
+  real bM;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bA ~ normal(0, 1);
+  bM ~ normal(0, 1);
+  sigma ~ exponential(1);
+  H ~ normal(a + bA * (A - 18) + bM * M, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+A_t = torch.empty(n, 1).uniform_(18, 65)
+H_t = torch.randn(n, 1)
+p_m = torch.sigmoid(-2 + 0.08 * (A_t - 18) + 1.5 * H_t)
+M_t = torch.bernoulli(p_m)
+
+# Inputs: Standardized Age and Marriage status
+A_std = (A_t - 18) / 47.0
+inputs = torch.cat([A_std, M_t], dim=1)
+
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, H_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch weights [bA, bM]:", model.weight.data.numpy())
+```
+:::
 
 ---
 
@@ -366,6 +815,112 @@ This is important because analysts often lack direct measurements and use:
 
 A proxy inherits some of the causal consequences of the variable it measures.
 
+### 9.1 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+X <- rnorm(n, 0, 1)
+Y <- rnorm(n, 0, 1)
+# Z is a collider of X and Y
+Z <- rnorm(n, X + Y, 0.5)
+# D is a descendant of collider Z
+D <- rnorm(n, Z, 0.5)
+
+# 1. Unconditioned (correct independence X _||_ Y)
+m1 <- lm(Y ~ X)
+cat("Unconditioned bX:", round(coef(m1)["X"], 3), "\n")
+
+# 2. Conditioned on descendant D (partially opens collider path!)
+m2 <- lm(Y ~ X + D)
+cat("Conditioned on descendant D bX:", round(coef(m2)["X"], 3), "\n")
+
+# 3. Conditioned directly on collider Z (fully opens collider path)
+m3 <- lm(Y ~ X + Z)
+cat("Conditioned on collider Z bX:", round(coef(m3)["X"], 3), "\n")
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+X_data = np.random.normal(0, 1, size=n)
+Y_data = np.random.normal(0, 1, size=n)
+Z_data = np.random.normal(X_data + Y_data, 0.5)
+D_data = np.random.normal(Z_data, 0.5)
+
+with pm.Model() as model_descendant:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bX = pm.Normal("bX", mu=0, sigma=1)
+    bD = pm.Normal("bD", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bX * X_data + bD * D_data
+    y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=Y_data)
+    
+    idata_d = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_d, var_names=["bX", "bD"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] D;
+  vector[N] Y;
+}
+parameters {
+  real a;
+  real bX;
+  real bD;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bD ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bD * D, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+X_t = torch.randn(n, 1)
+Y_t = torch.randn(n, 1)
+Z_t = torch.normal(X_t + Y_t, 0.5)
+D_t = torch.normal(Z_t, 0.5)
+
+inputs = torch.cat([X_t, D_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, Y_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Descendant weights [bX, bD]:", model.weight.data.numpy())
+```
+:::
+
 ---
 
 ## 10. D-separation
@@ -396,6 +951,92 @@ Closed unless $Z$ or one of its descendants is conditioned on.
 
 The rules are local, but their implications apply to full paths in large DAGs.
 
+### 10.1 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking / dagitty)
+```{r}
+library(dagitty)
+library(rethinking)
+
+# Define DAG with fork (Z), pipe (M), and collider (C)
+g <- dagitty("dag {
+    Z -> X
+    Z -> Y
+    X -> M -> Y
+    X -> C <- Y
+}")
+
+# Query implied conditional independencies automatically
+cat("Implied conditional independencies:\n")
+print(impliedConditionalIndependencies(g))
+
+# Test specific d-separations
+cat("Is X d-separated from Y given Z and M? ", dseparated(g, "X", "Y", c("Z", "M")), "\n")
+cat("Is X d-separated from Y given C? ", dseparated(g, "X", "Y", c("C")), "\n")
+```
+
+### Python (PyMC / dagitty / networkx)
+```python
+import networkx as nx
+import numpy as np
+
+# Create directed acyclic graph in NetworkX
+G = nx.DiGraph()
+G.add_edges_from([("Z", "X"), ("Z", "Y"), ("X", "M"), ("M", "Y"), ("X", "C"), ("Y", "C")])
+
+# Verify d-separation using networkx d_separated rule
+print("Is X d-separated from Y given Z and M?", nx.d_separated(G, {"X"}, {"Y"}, {"Z", "M"}))
+print("Is X d-separated from Y given C?", nx.d_separated(G, {"X"}, {"Y"}, {"C"}))
+```
+
+### Stan
+```stan
+// Structural Equation Model representing D-separation graph verification
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] Y;
+  vector[N] Z;
+  vector[N] M;
+}
+parameters {
+  real a;
+  real bX;
+  real bZ;
+  real bM;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bZ ~ normal(0, 1);
+  bM ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bZ * Z + bM * M, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+
+# Demonstrate numerical covariance checking for D-separation
+torch.manual_seed(123)
+n = 1000
+Z = torch.randn(n, 1)
+X = 0.8 * Z + torch.randn(n, 1) * 0.5
+Y = 0.8 * Z + torch.randn(n, 1) * 0.5
+
+# Calculate partial correlation between X and Y given Z (residual correlation)
+res_X = X - (torch.cov(torch.cat([X, Z], dim=1))[0, 1] / torch.var(Z)) * Z
+res_Y = Y - (torch.cov(torch.cat([Y, Z], dim=1))[0, 1] / torch.var(Z)) * Z
+partial_corr = torch.cov(torch.cat([res_X, res_Y], dim=1))[0, 1] / (torch.std(res_X) * torch.std(res_Y))
+
+print("PyTorch Partial Correlation Cor(X, Y | Z):", partial_corr.item())
+```
+:::
+
 ---
 
 ## 11. Causal paths and backdoor paths
@@ -419,6 +1060,121 @@ To identify the total effect of $X$ on $Y$, an adjustment set should:
 1. close every open backdoor path;
 2. avoid blocking causal paths from $X$ to $Y$;
 3. avoid opening paths through colliders or collider descendants.
+
+### 11.1 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking / dagitty)
+```{r}
+library(dagitty)
+library(rethinking)
+
+# DAG with backdoor path via C and direct/mediated causal path via M
+g_backdoor <- dagitty("dag {
+    C -> X
+    C -> Y
+    X -> M -> Y
+    X -> Y
+}")
+
+# Find adjustment sets for total effect of X on Y
+adjustment_sets <- adjustmentSets(g_backdoor, exposure = "X", outcome = "Y")
+cat("Minimal adjustment set for total effect X -> Y:\n")
+print(adjustment_sets)
+
+# Simulation
+set.seed(123)
+n <- 1000
+C <- rnorm(n, 0, 1)
+X <- rnorm(n, 1.5 * C, 1)
+M <- rnorm(n, 0.8 * X, 1)
+Y <- rnorm(n, 0.5 * X + 1.2 * M + 2.0 * C, 1)
+
+# Confounded regression (no adjustment)
+cat("Confounded effect:", round(coef(lm(Y ~ X))["X"], 3), "\n")
+
+# Adjusted regression (closing backdoor C, total effect)
+cat("Adjusted total effect (closing C):", round(coef(lm(Y ~ X + C))["X"], 3), "\n")
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+C_data = np.random.normal(0, 1, size=n)
+X_data = np.random.normal(1.5 * C_data, 1)
+M_data = np.random.normal(0.8 * X_data, 1)
+Y_data = np.random.normal(0.5 * X_data + 1.2 * M_data + 2.0 * C_data, 1)
+
+with pm.Model() as model_backdoor:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bX = pm.Normal("bX", mu=0, sigma=1)
+    bC = pm.Normal("bC", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bX * X_data + bC * C_data
+    y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=Y_data)
+    
+    idata_bd = pm.sample(draws=1000, tune=1000, return_inferencedata=True)
+
+print(az.summary(idata_bd, var_names=["bX", "bC"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] C;
+  vector[N] Y;
+}
+parameters {
+  real a;
+  real bX;
+  real bC;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bC ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bC * C, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+C_t = torch.randn(n, 1)
+X_t = torch.normal(1.5 * C_t, 1.0)
+M_t = torch.normal(0.8 * X_t, 1.0)
+Y_t = torch.normal(0.5 * X_t + 1.2 * M_t + 2.0 * C_t, 1.0)
+
+# Closing backdoor by including C
+inputs = torch.cat([X_t, C_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, Y_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Total Effect [bX, bC]:", model.weight.data.numpy())
+```
+:::
 
 ---
 
@@ -512,7 +1268,7 @@ cat("Conditional Cor(X, Y | Z=1):", round(cor(X[Z==1], Y[Z==1]), 3), "\n")
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 set.seed(123)
 n <- 1000
@@ -640,7 +1396,7 @@ cat("Conditional Cor(X, Y | Z=1):", round(cor(X[Z==1], Y[Z==1]), 3), "\n")
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 set.seed(123)
 n <- 1000
@@ -766,7 +1522,7 @@ cat("Conditional Cor(X, Y | Z=1):", round(cor(X[Z==1], Y[Z==1]), 3), "\n")
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 set.seed(123)
 n <- 1000
@@ -898,7 +1654,7 @@ cat("Selected population correlation Cor(NW, TW | Selected):", round(cor(nw[sele
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 set.seed(1914)
 N <- 200
@@ -1057,7 +1813,7 @@ precis(m6.9, depth=2)
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 d <- sim_happiness(seed=1977, N_years=100)
 d2 <- d[d$age > 17, ]
@@ -1219,7 +1975,7 @@ precis(m6.11)
 
 ::: {.panel-tabset}
 ### R (rethinking)
-```r
+```{r}
 library(rethinking)
 set.seed(1)
 N <- 200
@@ -1364,24 +2120,198 @@ The absence of $U$ from the data does not remove it from the world.
 
 ## 22. The Table 2 fallacy
 
-A multivariable regression table often lists one coefficient for every predictor and invites a causal interpretation of each coefficient.
+### 22.1 What is the Table 2 fallacy?
 
-This is unsafe.
+The **Table 2 fallacy** (Westreich & Greenland, 2013) refers to the widespread but erroneous practice of presenting multiple regression coefficients from a single model in a summary table ("Table 2" in standard medical and social science papers) and interpreting **all** of them as causal effects.
 
-A single model may include variables with different causal roles:
+In a multivariable regression model:
 
-- exposure of interest;
-- common cause;
-- mediator;
-- collider;
-- proxy;
-- precision predictor.
+$$ Y_i = \alpha + \beta_X X_i + \beta_Z Z_i + \varepsilon_i $$
 
-The adjustment set appropriate for estimating one coefficient may be inappropriate for another coefficient in the same table.
+researchers often report both $\beta_X$ and $\beta_Z$, treating $\beta_X$ as the causal effect of $X$ on $Y$ and $\beta_Z$ as the causal effect of $Z$ on $Y$. 
 
-Therefore, a regression table is not a list of independently identified causal effects.
+This interpretation is fundamentally flawed because **an adjustment set tailored to identify the effect of $X$ is generally NOT valid for identifying the effect of $Z$.**
 
-Each causal effect needs its own estimand and adjustment argument.
+---
+
+### 22.2 Why a single model cannot estimate multiple causal effects
+
+Consider a classic DAG where $Z$ causes $X$, and both $Z$ and $X$ affect outcome $Y$:
+
+```{mermaid}
+%%| label: fig-table2-fallacy
+%%| fig-cap: "The Table 2 Fallacy: Z affects Y both directly and indirectly through X"
+flowchart LR
+    Z["Z (Confounder for X, but Primary Cause of X)"] ---> X["X (Exposure of Interest)"]
+    X ---> Y["Y (Outcome)"]
+    Z ---> Y
+```
+
+Suppose we fit the regression model:
+
+$$ Y = \alpha + \beta_X X + \beta_Z Z + \varepsilon $$
+
+1. **Estimating the effect of $X$ ($\beta_X$):**
+   - $Z$ is a common cause (confounder) on the backdoor path $X \leftarrow Z \rightarrow Y$.
+   - Controlling for $Z$ blocks this backdoor path.
+   - Therefore, $\beta_X$ validly estimates the causal effect of $X$ on $Y$.
+
+2. **Estimating the effect of $Z$ ($\beta_Z$):**
+   - $Z$ affects $Y$ through **two** pathways:
+     - Direct path: $Z \rightarrow Y$
+     - Indirect path (mediated): $Z \rightarrow X \rightarrow Y$
+   - By including $X$ in the regression, we condition on $X$.
+   - $X$ is a **mediator** on the path $Z \rightarrow X \rightarrow Y$. Controlling for $X$ blocks this pipe!
+   - As a result, $\beta_Z$ estimates ONLY the **direct effect** of $Z$ on $Y$, completely omitting its indirect effect through $X$.
+   - Worse, if there is unobserved confounding between $X$ and $Y$, $X$ becomes a **collider**, introducing collider bias into $\beta_Z$.
+
+Therefore, $\beta_Z$ is **biased** as an estimate of the total causal effect of $Z$ on $Y$.
+
+---
+
+### 22.3 Numerical Simulation
+
+Let's simulate a scenario where $Z$ has a total causal effect of $+3$ on $Y$ ($+2$ directly, plus $+1$ indirectly via $X$):
+
+```{r}
+#| label: fig-table2-sim
+set.seed(123)
+n <- 1000
+
+# Z causes X (effect = 0.5)
+Z <- rnorm(n, 0, 1)
+X <- 0.5 * Z + rnorm(n, 0, 1)
+
+# X and Z both cause Y (direct X->Y = 2, direct Z->Y = 2)
+# Total effect of Z on Y = 2 + (0.5 * 2) = 3
+Y <- 2 * X + 2 * Z + rnorm(n, 0, 1)
+
+# Model 1: Y ~ X + Z (Designed to estimate effect of X)
+m1 <- lm(Y ~ X + Z)
+cat("--- Model 1: Y ~ X + Z ---\n")
+print(summary(m1)$coefficients)
+
+# Model 2: Y ~ Z (Designed to estimate TOTAL effect of Z)
+m2 <- lm(Y ~ Z)
+cat("\n--- Model 2: Y ~ Z (Total effect of Z) ---\n")
+print(summary(m2)$coefficients)
+```
+
+**Output Analysis:**
+* In `Model 1` (`Y ~ X + Z`), $\beta_X \approx 2.0$ (correct causal effect of $X$), but $\beta_Z \approx 2.0$ (reflects *only* the direct effect, missing the total effect of $3.0$).
+* To estimate the total causal effect of $Z$, we MUST fit `Model 2` (`Y ~ Z`), where $\beta_Z \approx 3.0$.
+
+---
+
+### 22.4 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking & lm)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+
+Z <- rnorm(n)
+X <- 0.5 * Z + rnorm(n)
+Y <- 2 * X + 2 * Z + rnorm(n)
+
+# Model for X's effect (adjusts for confounder Z)
+m_effect_X <- lm(Y ~ X + Z)
+
+# Model for Z's total effect (does NOT adjust for mediator X)
+m_effect_Z <- lm(Y ~ Z)
+
+cat("Effect of X (from Model 1):", round(coef(m_effect_X)["X"], 2), "\n")
+cat("Direct effect of Z (from Model 1 - incomplete!):", round(coef(m_effect_X)["Z"], 2), "\n")
+cat("Total effect of Z (from Model 2 - correct!):", round(coef(m_effect_Z)["Z"], 2), "\n")
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(123)
+n = 1000
+Z_data = np.random.normal(0, 1, size=n)
+X_data = 0.5 * Z_data + np.random.normal(0, 1, size=n)
+Y_data = 2 * X_data + 2 * Z_data + np.random.normal(0, 1, size=n)
+
+# Model 1: Y ~ X + Z
+with pm.Model() as model_table2:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bX = pm.Normal("bX", mu=0, sigma=1)
+    bZ = pm.Normal("bZ", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a + bX * X_data + bZ * Z_data
+    y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=Y_data)
+    idata = pm.sample(draws=1000, tune=1000, return_inferencedata=True, progressbar=False)
+
+print(az.summary(idata, var_names=["bX", "bZ"]))
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] Z;
+  vector[N] Y;
+}
+parameters {
+  real a;
+  real bX;
+  real bZ;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bZ ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bZ * Z, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+Z_t = torch.randn(n, 1)
+X_t = 0.5 * Z_t + torch.randn(n, 1)
+Y_t = 2 * X_t + 2 * Z_t + torch.randn(n, 1)
+
+inputs = torch.cat([X_t, Z_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, Y_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch weights [bX, bZ]:", model.weight.data.numpy())
+```
+:::
+
+---
+
+### 22.5 Summary Principles
+
+> **Rule of Thumb:** One model = One focal estimand.
+> 
+> - Never present a table of multiple regression coefficients and interpret them all as causal effects.
+> - A variable $Z$ included to control for confounding of $X \rightarrow Y$ cannot simultaneously have its own coefficient interpreted as the total causal effect of $Z \rightarrow Y$.
+> - If you care about the causal effect of multiple variables, fit **separate models**, each with an adjustment set specifically chosen for that exposure's DAG backdoor criterion.
 
 ---
 
@@ -1409,21 +2339,230 @@ This is not necessarily bias. It can be an honest statement that the data cannot
 
 ## 24. Post-treatment bias
 
-A post-treatment variable is caused by the exposure.
+### 24.1 What is post-treatment bias?
 
-Suppose:
+**Post-treatment bias** occurs when a regression model conditions on a variable $Z$ that is itself influenced by the exposure/treatment $T$ ($T \rightarrow Z$).
 
-$$ X \rightarrow Z \rightarrow Y $$
+In causal inference, post-treatment variables are dangerous controls. Depending on the underlying DAG, conditioning on a post-treatment variable can introduce bias through **two distinct mechanisms**:
 
-and the target is the total effect of $X$ on $Y$.
+1. **Blocking the causal pipe (Mediator Blocking):** It masks the indirect causal mechanism through which the treatment operates.
+2. **Opening a collider path (Collider Bias):** If the mediator and outcome share unobserved confounders, conditioning on the mediator turns it into an active collider, introducing spurious association.
 
-Conditioning on $Z$ blocks the mediated pathway.
+---
 
-Worse, if an unobserved variable $U$ affects both $Z$ and $Y$:
+### 24.2 Mechanism 1: Blocking the Causal Mediator
 
-$$ X \rightarrow Z \leftarrow U \rightarrow Y $$
+Consider the classic plant growth experiment (*Statistical Rethinking*, Section 6.2):
+* $T$: Soil antifungal treatment ($T=1$ treated, $T=0$ control).
+* $F$: Presence of plant fungus ($F=1$ present, $F=0$ absent).
+* $H$: Final plant height.
 
-then conditioning on $Z$ also opens a collider path.
+The treatment works by reducing fungus ($T \rightarrow F$), which in turn allows plants to grow taller ($F \rightarrow H$):
+
+```{mermaid}
+%%| label: fig-post-treatment-pipe
+%%| fig-cap: "Post-treatment bias: Conditioning on mediator F blocks the causal path T -> F -> H"
+flowchart LR
+    T["T (Treatment)"] ---> F["F (Fungus - Post-Treatment Mediator)"]
+    F ---> H["H (Plant Height)"]
+    T -. Direct Effect .-> H
+```
+
+If our scientific goal is to estimate the **total causal effect** of treatment $T$ on height $H$:
+* In the model `lm(H ~ T)`, the coefficient $\hat{\beta}_T$ captures the total effect (both direct and indirect via fungus reduction).
+* If we fit `lm(H ~ T + F)`, we condition on $F$. This holds fungus status constant across treated and untreated plants, **blocking the pipe** $T \rightarrow F \rightarrow H$. 
+* Inside the $F=0$ group (fungus-free) and inside the $F=1$ group (fungus present), treatment appears to have zero effect because its primary mechanism (killing fungus) has been held fixed!
+
+---
+
+### 24.3 Mechanism 2: Opening a Collider Path via Unobserved Confounders
+
+The problem becomes even worse when there is an **unobserved variable $U$** (e.g., general plant hardiness or soil quality) that affects both the mediator $F$ and the outcome $H$:
+
+```{mermaid}
+%%| label: fig-post-treatment-collider
+%%| fig-cap: "Post-treatment collider bias: Conditioning on F opens the backdoor path T -> F <- U -> H"
+flowchart LR
+    T["T (Treatment)"] ---> F["F (Fungus)"]
+    U["U (Unobserved Hardiness)"] ---> F
+    U ---> H["H (Plant Height)"]
+    F ---> H
+```
+
+In this DAG, $F$ is a **collider** on the path $T \rightarrow F \leftarrow U \rightarrow H$:
+* Unconditioned ($F$ not in model): The path $T \rightarrow F \leftarrow U \rightarrow H$ is **blocked** by default at the collider $F$.
+* Conditioned ($F$ in model `lm(H ~ T + F)`): Conditioning on $F$ **opens the collider path** between $T$ and $U$!
+
+**Intuition:** Among plants that still have fungus ($F=1$), a treated plant ($T=1$) must have had exceptionally **low hardiness** ($U$) to contract fungus despite receiving treatment. Conversely, an untreated plant ($T=0$) with fungus might have normal hardiness. Thus, conditioning on $F$ creates a spurious negative correlation between $T$ and $U$, making treatment look **harmful** to plant height!
+
+---
+
+### 24.4 Numerical Simulation: Plant Fungus Experiment
+
+Let's simulate both mechanisms in R:
+
+```{r}
+#| label: fig-post-treatment-sim
+set.seed(1999)
+n <- 1000
+
+# 1. Randomized Treatment T (50% treated)
+T <- rbinom(n, 1, 0.5)
+
+# 2. Unobserved plant hardiness U
+U <- rnorm(n, 0, 1)
+
+# 3. Fungus F: Reduced by Treatment T, reduced by Hardiness U
+# Probability of fungus drops with treatment and hardiness
+p_fungus <- 1 / (1 + exp(- (0.5 - 2.0 * T - 1.5 * U)))
+F <- rbinom(n, 1, p_fungus)
+
+# 4. Height H: Increased by Hardiness U, reduced by Fungus F
+# True total effect of T operates ENTIRELY by suppressing F
+H <- 10 + 2.0 * U - 3.0 * F + rnorm(n, 0, 0.5)
+
+# --- Model 1: Total Effect (Correct - Unconditioned on F) ---
+m_total <- lm(H ~ T)
+cat("=== Model 1: Total Effect lm(H ~ T) ===\n")
+print(summary(m_total)$coefficients)
+
+# --- Model 2: Post-Treatment Biased Model lm(H ~ T + F) ---
+m_direct <- lm(H ~ T + F)
+cat("\n=== Model 2: Post-Treatment Biased lm(H ~ T + F) ===\n")
+print(summary(m_direct)$coefficients)
+```
+
+**Output Analysis:**
+* **`m_total` (`H ~ T`)**: Correctly shows that treatment $T$ increases plant height by $\approx +1.8$ units by suppressing fungus.
+* **`m_direct` (`H ~ T + F`)**: Conditioned on $F$, treatment $T$ appears to have a **negative** effect on height ($\approx -0.6$), because conditioning on collider $F$ induces negative selection bias via unobserved hardiness $U$.
+
+---
+
+### 24.5 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking & lm)
+```{r}
+library(rethinking)
+set.seed(123)
+n <- 1000
+
+T <- rbinom(n, 1, 0.5)
+U <- rnorm(n, 0, 1)
+F <- rbinom(n, 1, 1 / (1 + exp(- (0.5 - 2.0 * T - 1.5 * U))))
+H <- 10 + 2.0 * U - 3.0 * F + rnorm(n, 0, 0.5)
+
+# Total effect (unconditioned on post-treatment F)
+m_total <- lm(H ~ T)
+cat("Total Treatment Effect estimate bT:", round(coef(m_total)["T"], 2), "\n")
+
+# Biased post-treatment model
+m_biased <- lm(H ~ T + F)
+cat("Post-treatment biased estimate bT:", round(coef(m_biased)["T"], 2), "\n")
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+from scipy.special import expit
+
+np.random.seed(123)
+n = 1000
+
+T_data = np.random.binomial(1, 0.5, size=n)
+U_data = np.random.normal(0, 1, size=n)
+p_fungus = expit(0.5 - 2.0 * T_data - 1.5 * U_data)
+F_data = np.random.binomial(1, p_fungus)
+H_data = 10 + 2.0 * U_data - 3.0 * F_data + np.random.normal(0, 0.5, size=n)
+
+# Model 1: Total Effect H ~ T
+with pm.Model() as model_total:
+    a = pm.Normal("a", mu=10, sigma=2)
+    bT = pm.Normal("bT", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    mu = a + bT * T_data
+    h_obs = pm.Normal("h_obs", mu=mu, sigma=sigma, observed=H_data)
+    idata_total = pm.sample(draws=1000, tune=1000, progressbar=False, return_inferencedata=True)
+
+# Model 2: Biased Model H ~ T + F
+with pm.Model() as model_biased:
+    a = pm.Normal("a", mu=10, sigma=2)
+    bT = pm.Normal("bT", mu=0, sigma=1)
+    bF = pm.Normal("bF", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    mu = a + bT * T_data + bF * F_data
+    h_obs = pm.Normal("h_obs", mu=mu, sigma=sigma, observed=H_data)
+    idata_biased = pm.sample(draws=1000, tune=1000, progressbar=False, return_inferencedata=True)
+
+print("Total Effect bT:", az.summary(idata_total, var_names=["bT"])["mean"].values[0])
+print("Biased Post-treatment bT:", az.summary(idata_biased, var_names=["bT"])["mean"].values[0])
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] T;
+  vector[N] F;
+  vector[N] H;
+}
+parameters {
+  real a;
+  real bT;
+  real bF;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(10, 2);
+  bT ~ normal(0, 1);
+  bF ~ normal(0, 1);
+  sigma ~ exponential(1);
+  H ~ normal(a + bT * T + bF * F, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(123)
+n = 1000
+
+T_t = torch.bernoulli(torch.full((n, 1), 0.5))
+U_t = torch.randn(n, 1)
+p_f = torch.sigmoid(0.5 - 2.0 * T_t - 1.5 * U_t)
+F_t = torch.bernoulli(p_f)
+H_t = 10.0 + 2.0 * U_t - 3.0 * F_t + 0.5 * torch.randn(n, 1)
+
+# Fit biased model H ~ T + F
+inputs = torch.cat([T_t, F_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, H_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Biased weights [bT, bF]:", model.weight.data.numpy())
+```
+:::
+
+---
+
+### 24.6 Summary Rules for Post-Treatment Variables
+
+> **Golden Rule of Covariate Selection:** 
+> 
+> 1. **Do NOT condition on post-treatment variables** when your estimand is the total causal effect of treatment.
+> 2. **Check timeline & DAG position:** If a variable is measured *after* treatment or is causally downstream of treatment ($T \rightarrow Z$), exclude it from the adjustment set for total effect models.
+> 3. **Mediation Analysis:** If your goal is to isolate direct vs. indirect pathways, standard linear regression with post-treatment controls is dangerous whenever unobserved mediator-outcome confounders ($U$) exist. Specialized mediation techniques (g-formula, marginal structural models) are required.
 
 ---
 
@@ -1489,7 +2628,7 @@ adjustmentSets(g, exposure = "X", outcome = "Y")
 
 ::: {.panel-tabset}
 ### R (dagitty)
-```r
+```{r}
 library(dagitty)
 
 dag <- dagitty("dag {
@@ -1821,11 +2960,11 @@ Consider the DAG below:
 
 $$
 \begin{array}{ccc}
-X & \longrightarrow & Y \\
+X & \longr\rightarrow & Y \\
 \nwarrow & & \nearrow \\
  & Z & \\
  & \nwarrow & \\
- & & A \longrightarrow Y
+ & & A \longr\rightarrow Y
 \end{array}
 $$
 

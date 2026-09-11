@@ -83,22 +83,23 @@ knitr:
 - [23. Multicollinearity as an identification warning](#23-multicollinearity-as-an-identification-warning)
 - [24. Post-treatment bias](#24-post-treatment-bias)
 - [25. Adjustment sets are estimand-specific](#25-adjustment-sets-are-estimand-specific)
-- [26. Regression implementation after identification](#26-regression-implementation-after-identification)
-- [27. DAG software](#27-dag-software)
-- [28. CRM application: targeting confounding](#28-crm-application-targeting-confounding)
-- [29. CRM application: campaign engagement as mediator](#29-crm-application-campaign-engagement-as-mediator)
-- [30. CRM application: openers-only analysis](#30-crm-application-openers-only-analysis)
-- [31. CRM application: support-contact selection](#31-crm-application-support-contact-selection)
-- [32. Implications for CausalOps](#32-implications-for-causalops)
-  - [32.1 Path audit artifact](#321-path-audit-artifact)
-  - [32.2 Control-role validation](#322-control-role-validation)
-  - [32.3 Selection audit](#323-selection-audit)
-- [33. Common errors exposed by A06](#33-common-errors-exposed-by-a06)
-- [34. Lecture takeaways](#34-lecture-takeaways)
-- [35. Review questions](#35-review-questions)
-- [36. Book reading guide](#36-book-reading-guide)
-- [37. Official code guide](#37-official-code-guide)
-- [38. Appendix — Homework A06 Question & Solutions](#38-appendix--homework-a06-question--solutions)
+- [26. Graph properties for a valid adjustment set](#26-graph-properties-for-a-valid-adjustment-set)
+- [27. Regression implementation after identification](#27-regression-implementation-after-identification)
+- [28. DAG software](#28-dag-software)
+- [29. CRM application: targeting confounding](#29-crm-application-targeting-confounding)
+- [30. CRM application: campaign engagement as mediator](#30-crm-application-campaign-engagement-as-mediator)
+- [31. CRM application: openers-only analysis](#31-crm-application-openers-only-analysis)
+- [32. CRM application: support-contact selection](#32-crm-application-support-contact-selection)
+- [33. Implications for CausalOps](#33-implications-for-causalops)
+  - [33.1 Path audit artifact](#331-path-audit-artifact)
+  - [33.2 Control-role validation](#332-control-role-validation)
+  - [33.3 Selection audit](#333-selection-audit)
+- [34. Common errors exposed by A06](#34-common-errors-exposed-by-a06)
+- [35. Lecture takeaways](#35-lecture-takeaways)
+- [36. Review questions](#36-review-questions)
+- [37. Book reading guide](#37-book-reading-guide)
+- [38. Official code guide](#38-official-code-guide)
+- [39. Appendix — Homework A06 Question & Solutions](#39-appendix--homework-a06-question--solutions)
 
 ---
 
@@ -2568,24 +2569,395 @@ print("PyTorch Biased weights [bT, bF]:", model.weight.data.numpy())
 
 ## 25. Adjustment sets are estimand-specific
 
-Consider:
+### 25.1 The Principle: Questions dictate adjustment sets, not data
 
-$$ X \rightarrow M \rightarrow Y, \quad C \rightarrow X, \quad C \rightarrow Y $$
+A common misconception in applied statistics is that a dataset has a single, static "correct set of control variables." 
 
-For the total effect of $X$ on $Y$:
+In causal inference, **adjustment sets belong to scientific questions (estimands), not datasets or models.**
 
-- adjust for $C$;
-- do not adjust for $M$.
-
-For a controlled direct effect of $X$ not through $M$:
-
-- $M$ must be fixed or modeled appropriately;
-- additional mediation assumptions are required;
-- simply adding $M$ to a regression may be insufficient.
+For a single causal DAG, different research questions require different adjustment sets:
+* Asking for the **Total Causal Effect** requires closing backdoor paths while leaving causal mechanisms open.
+* Asking for a **Direct Causal Effect** requires additionally blocking or controlling for downstream mediators.
+* Asking for **Confounder Control** requires adjusting for pre-treatment common causes without touching colliders.
 
 ---
 
-## 26. Regression implementation after identification
+### 25.2 The Canonical Example
+
+Consider the canonical DAG containing a confounder $C$, exposure $X$, mediator $M$, and outcome $Y$:
+
+```{mermaid}
+%%| label: fig-estimand-specific-dag
+%%| fig-cap: "DAG with Confounder C, Exposure X, Mediator M, and Outcome Y"
+flowchart LR
+    C["C (Confounder)"] ---> X["X (Exposure)"]
+    C ---> Y["Y (Outcome)"]
+    X ---> M["M (Mediator)"]
+    M ---> Y["Y (Outcome)"]
+    X -. Direct Effect .-> Y
+```
+
+Depending on the estimand of interest, the required adjustment set changes:
+
+#### Estimand 1: Total Causal Effect of $X$ on $Y$
+* **Scientific Question:** *"If we intervene to change $X$, what is the total change in $Y$, allowing $M$ to change naturally?"*
+* **Adjustment Set:** $\mathcal{Z} = \{C\}$
+* **Rules:** 
+  - Adjust for $C$ to close the open backdoor path $X \leftarrow C \rightarrow Y$.
+  - **Do NOT adjust for $M$**. $M$ is a mediator on the causal path $X \rightarrow M \rightarrow Y$. Including $M$ would block part of the causal effect being estimated.
+* **Model:** `lm(Y ~ X + C)`
+
+#### Estimand 2: Controlled Direct Effect (CDE) of $X$ on $Y$ (fixing $M = m$)
+* **Scientific Question:** *"If we intervene to set $X = x$ while artificially holding mediator $M = m$ constant for everyone, what is the remaining effect of $X$ on $Y$?"*
+* **Adjustment Set:** $\mathcal{Z} = \{C, M\}$ (assuming no unobserved $M \rightarrow Y$ confounders).
+* **Rules:**
+  - Adjust for $C$ to close the backdoor path $X \leftarrow C \rightarrow Y$.
+  - Adjust for $M$ to block the indirect causal pathway $X \rightarrow M \rightarrow Y$.
+* **Model:** `lm(Y ~ X + M + C)`
+
+---
+
+### 25.3 Numerical Simulation: Comparing Estimands
+
+Let's simulate data where:
+* Confounder $C$ affects $X$ ($+0.8$) and $Y$ ($+1.5$).
+* Direct effect $X \rightarrow Y$ is $+1.0$.
+* Mediator path: $X \rightarrow M$ ($+1.0$) and $M \rightarrow Y$ ($+2.0$).
+* **True Total Effect of $X$ on $Y$:** $1.0 + (1.0 \times 2.0) = +3.0$.
+* **True Direct Effect of $X$ on $Y$:** $+1.0$.
+
+```{r}
+#| label: fig-estimand-specific-sim
+set.seed(42)
+n <- 1000
+
+# Confounder C
+C <- rnorm(n, 0, 1)
+
+# Exposure X depends on C
+X <- 0.8 * C + rnorm(n, 0, 1)
+
+# Mediator M depends on X
+M <- 1.0 * X + rnorm(n, 0, 1)
+
+# Outcome Y depends on X (direct=1.0), M (direct=2.0), and C (direct=1.5)
+Y <- 1.0 * X + 2.0 * M + 1.5 * C + rnorm(n, 0, 1)
+
+# Model 1: Total Effect of X (Adjust ONLY for confounder C)
+m_total <- lm(Y ~ X + C)
+cat("=== Estimand 1: Total Effect of X on Y (Target: 3.0) ===\n")
+print(summary(m_total)$coefficients)
+
+# Model 2: Controlled Direct Effect of X (Adjust for C AND Mediator M)
+m_direct <- lm(Y ~ X + M + C)
+cat("\n=== Estimand 2: Direct Effect of X on Y (Target: 1.0) ===\n")
+print(summary(m_direct)$coefficients)
+```
+
+**Output Analysis:**
+* `Model 1` (`Y ~ X + C`) correctly yields $\hat{\beta}_X \approx 3.0$ (the **total effect**).
+* `Model 2` (`Y ~ X + M + C`) correctly yields $\hat{\beta}_X \approx 1.0$ (the **direct effect**).
+* **Crucial Lesson:** Neither model is "wrong"—each is the exact right answer to a *different* causal question.
+
+---
+
+### 25.4 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (rethinking & lm)
+```{r}
+library(rethinking)
+set.seed(42)
+n <- 1000
+
+C <- rnorm(n)
+X <- 0.8 * C + rnorm(n)
+M <- 1.0 * X + rnorm(n)
+Y <- 1.0 * X + 2.0 * M + 1.5 * C + rnorm(n)
+
+# Total effect model (adjusts for C, excludes M)
+m_total <- lm(Y ~ X + C)
+
+# Direct effect model (adjusts for C and M)
+m_direct <- lm(Y ~ X + M + C)
+
+cat("Estimated Total Effect of X:", round(coef(m_total)["X"], 2), "\n")
+cat("Estimated Direct Effect of X:", round(coef(m_direct)["X"], 2), "\n")
+```
+
+### Python (PyMC)
+```python
+import pymc as pm
+import numpy as np
+import arviz as az
+
+np.random.seed(42)
+n = 1000
+C_data = np.random.normal(0, 1, size=n)
+X_data = 0.8 * C_data + np.random.normal(0, 1, size=n)
+M_data = 1.0 * X_data + np.random.normal(0, 1, size=n)
+Y_data = 1.0 * X_data + 2.0 * M_data + 1.5 * C_data + np.random.normal(0, 1, size=n)
+
+# Total effect model: Y ~ X + C
+with pm.Model() as model_total:
+    a = pm.Normal("a", mu=0, sigma=1)
+    bX = pm.Normal("bX", mu=0, sigma=1)
+    bC = pm.Normal("bC", mu=0, sigma=1)
+    sigma = pm.Exponential("sigma", lam=1)
+    mu = a + bX * X_data + bC * C_data
+    y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=Y_data)
+    idata_total = pm.sample(draws=1000, tune=1000, progressbar=False, return_inferencedata=True)
+
+print("PyMC Total Effect bX:", az.summary(idata_total, var_names=["bX"])["mean"].values[0])
+```
+
+### Stan
+```stan
+data {
+  int<lower=0> N;
+  vector[N] X;
+  vector[N] C;
+  vector[N] Y;
+}
+parameters {
+  real a;
+  real bX;
+  real bC;
+  real<lower=0> sigma;
+}
+model {
+  a ~ normal(0, 1);
+  bX ~ normal(0, 1);
+  bC ~ normal(0, 1);
+  sigma ~ exponential(1);
+  Y ~ normal(a + bX * X + bC * C, sigma);
+}
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(42)
+n = 1000
+C_t = torch.randn(n, 1)
+X_t = 0.8 * C_t + torch.randn(n, 1)
+M_t = 1.0 * X_t + torch.randn(n, 1)
+Y_t = 1.0 * X_t + 2.0 * M_t + 1.5 * C_t + torch.randn(n, 1)
+
+# Fit Total Effect model: Y ~ X + C
+inputs = torch.cat([X_t, C_t], dim=1)
+model = nn.Linear(2, 1)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+criterion = nn.MSELoss()
+
+for epoch in range(1000):
+    optimizer.zero_grad()
+    preds = model(inputs)
+    loss = criterion(preds, Y_t)
+    loss.backward()
+    optimizer.step()
+
+print("PyTorch Total Effect weights [bX, bC]:", model.weight.data.numpy())
+```
+:::
+
+---
+
+### 25.5 Summary Table: Estimands and Adjustment Rules
+
+| Target Estimand | What it Measures | Adjustment Set ($\mathcal{Z}$) | Model Formula |
+| :--- | :--- | :--- | :--- |
+| **Total Causal Effect** | Combined effect of $X$ directly and through all downstream mediators $M$ | Confounders ($C$) only | `lm(Y ~ X + C)` |
+| **Controlled Direct Effect** | Direct effect of $X$ on $Y$ when mediator $M$ is held fixed at a constant value $m$ | Confounders ($C$) + Mediator ($M$) | `lm(Y ~ X + M + C)` |
+---
+
+## 26. Graph properties for a valid adjustment set
+
+### 26.1 What makes a set of variables a valid adjustment set?
+
+Given an exposure $X$ and an outcome $Y$ in a causal DAG $G$, a set of observed variables $\mathcal{Z}$ is a **valid adjustment set** (or **sufficient adjustment set**) for estimating the total causal effect of $X$ on $Y$ if conditioning on $\mathcal{Z}$ allows us to identify the causal contrast:
+
+$$ P(Y \mid \mathrm{do}(X = x)) = \sum_{z} P(Y \mid X = x, \mathcal{Z} = z) P(\mathcal{Z} = z) $$
+
+To satisfy this condition, the graph $G$ and the proposed set $\mathcal{Z}$ must satisfy **four fundamental topological properties**:
+
+---
+
+### 26.2 Property 1: The No-Descendant Condition
+
+> **Condition:** No variable in $\mathcal{Z}$ can be a descendant of the exposure $X$:
+> $$ \mathcal{Z} \cap \mathrm{descendants}(X) = \emptyset $$
+
+* **Why it matters:** 
+  - Downstream descendants of $X$ include **mediators** ($X \rightarrow M \rightarrow Y$) and **post-treatment colliders/proxies** ($X \rightarrow Z \leftarrow U \rightarrow Y$).
+  - If $\mathcal{Z}$ contains a descendant of $X$, conditioning on it either **blocks the causal mechanism** (post-treatment mediator bias) or **opens a collider path** (post-treatment collider bias).
+
+---
+
+### 26.3 Property 2: The Backdoor Path Blocking Condition
+
+> **Condition:** $\mathcal{Z}$ must block every non-causal "backdoor" path between $X$ and $Y$ (paths containing an arrow pointing into $X$, i.e. $X \leftarrow \dots \rightarrow Y$).
+
+Mathematically, $\mathcal{Z}$ must **d-separate** $X$ and $Y$ in the modified graph $G_{\underline{X}}$, where all outgoing edges from $X$ are deleted:
+
+$$ X \perp\!\!\!\perp Y \mid \mathcal{Z} \quad \text{in } G_{\underline{X}} $$
+
+```{mermaid}
+%%| label: fig-backdoor-graph-mod
+%%| fig-cap: "Graph modification G_underline_X: Removing outgoing edges from X to test backdoor d-separation"
+flowchart LR
+    subgraph OriginalGraph["Original Graph G"]
+        direction LR
+        C1["C"] ---> X1["X"]
+        C1 ---> Y1["Y"]
+        X1 ---> M1["M"]
+        M1 ---> Y1
+    end
+
+    subgraph ModifiedGraph["Modified Graph G_underline_X"]
+        direction LR
+        C2["C"] ---> X2["X"]
+        C2 ---> Y2["Y"]
+        M2["M"] ---> Y2
+    end
+```
+
+In $G_{\underline{X}}$, the causal edge $X \rightarrow M$ is severed. The only remaining path between $X$ and $Y$ is the backdoor path $X \leftarrow C \rightarrow Y$, which is d-separated by conditioning on $\mathcal{Z} = \{C\}$.
+
+---
+
+### 26.4 Property 3: The No-Collider-Activation Condition
+
+> **Condition:** $\mathcal{Z}$ must not contain any colliders (or descendants of colliders) that open previously blocked non-causal paths between $X$ and $Y$.
+
+* If a path contains a collider $A \rightarrow Z \leftarrow B$, the path is **naturally closed**.
+* If $Z$ (or its descendant $D$) is included in $\mathcal{Z}$, conditioning on $Z$ **opens the path**, creating spurious non-causal association between $A$ and $B$.
+* A valid adjustment set MUST leave colliders unconditioned unless conditioning on another variable further along the path re-blocks it.
+
+---
+
+### 26.5 Property 4: Observability and Point Identification
+
+> **Condition:** Every variable in the adjustment set $\mathcal{Z}$ must be fully measured and observed in the dataset:
+> $$ \mathcal{Z} \subseteq \mathcal{V}_{\mathrm{observed}} $$
+
+* If all sets that block backdoor paths contain at least one **unobserved variable** $U$ (e.g. $X \leftarrow U \rightarrow Y$), then the backdoor criterion fails and the total causal effect $X \rightarrow Y$ is **not point-identified** by regression adjustment alone.
+* In such cases, alternative causal structures (such as Frontdoor Criterion or Instrumental Variables) must be used.
+
+---
+
+### 26.6 Minimal vs. Sufficient vs. Optimal Adjustment Sets
+
+1. **Sufficient Adjustment Set:** Any set $\mathcal{Z}$ that satisfies Properties 1–4. There can be many sufficient sets for a single DAG.
+2. **Minimal Adjustment Set:** A sufficient set $\mathcal{Z}$ such that removing *any* variable from $\mathcal{Z}$ renders it insufficient.
+3. **Optimal / Precision Adjustment Set:** A sufficient set that excludes uninformative noise variables and includes pre-treatment precision predictors of $Y$ (variables $P \rightarrow Y$ independent of $X$), which reduces standard errors without adding bias.
+
+---
+
+### 26.7 Numerical Simulation & Verification in R (`dagitty`)
+
+Let's test these properties programmatically in R using `dagitty`:
+
+```{r}
+#| label: fig-adj-properties-demo
+#| fig-cap: "Verifying graph properties and adjustment sets using dagitty"
+library(dagitty)
+
+# Define complex DAG with confounder C, mediator M, collider S, and precision variable P
+g <- dagitty("dag {
+  C -> X
+  C -> Y
+  X -> M -> Y
+  X -> S <- Y
+  P -> Y
+}")
+
+cat("=== Minimal Adjustment Sets for Total Effect X -> Y ===\n")
+print(adjustmentSets(g, exposure = "X", outcome = "Y", type = "minimal"))
+
+cat("\n=== Testing Candidate Sets ===\n")
+cat("Is {C} valid? ", isAdjustmentSet(g, exposure = "X", outcome = "Y", Z = c("C")), "\n")
+cat("Is {C, M} valid (includes mediator)? ", isAdjustmentSet(g, exposure = "X", outcome = "Y", Z = c("C", "M")), "\n")
+cat("Is {C, S} valid (includes collider)? ", isAdjustmentSet(g, exposure = "X", outcome = "Y", Z = c("C", "S")), "\n")
+cat("Is {C, P} valid (includes precision predictor)? ", isAdjustmentSet(g, exposure = "X", outcome = "Y", Z = c("C", "P")), "\n")
+```
+
+**Output Analysis:**
+* `{C}` is valid and minimal.
+* `{C, M}` is **invalid** for total effect because it violates Property 1 (No Descendants).
+* `{C, S}` is **invalid** because it violates Property 3 (No Collider Activation).
+* `{C, P}` is **valid and optimal**: $P$ improves statistical precision for $Y$ without introducing bias.
+
+---
+
+### 26.8 Implementation (R, PyMC, Stan, PyTorch)
+
+::: {.panel-tabset}
+### R (dagitty & rethinking)
+```{r}
+library(dagitty)
+library(rethinking)
+
+# Define DAG
+g <- dagitty("dag {
+  C -> X -> M -> Y
+  C -> Y
+  P -> Y
+}")
+
+# Query valid adjustment sets automatically
+adj_sets <- adjustmentSets(g, exposure = "X", outcome = "Y")
+cat("Valid adjustment sets for X -> Y:\n")
+print(adj_sets)
+```
+
+### Python (PyMC & NetworkX)
+```python
+import networkx as nx
+
+# Define DAG edges
+edges = [("C", "X"), ("C", "Y"), ("X", "M"), ("M", "Y"), ("P", "Y")]
+G = nx.DiGraph(edges)
+
+# Check Property 1: No descendants of X in adjustment set
+descendants_X = nx.descendants(G, "X")
+print("Descendants of X (cannot be in adjustment set):", descendants_X)
+```
+
+### Stan
+```stan
+// In Stan, identification is assumed prior to model specification.
+// The adjustment set {C, P} dictates the linear predictor:
+// Y ~ normal(a + bX * X + bC * C + bP * P, sigma);
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+
+# Linear model built according to valid adjustment set {C, P}
+# Input tensor contains [X, C, P]
+model = nn.Linear(3, 1)
+```
+:::
+
+---
+
+### 26.9 Summary Checklist for Graph Properties
+
+> **Adjustment Set Validation Checklist:**
+> 
+> - [x] **No Descendants of $X$:** Does $\mathcal{Z}$ exclude all mediators, colliders, and downstream proxies of $X$?
+> - [x] **Backdoor Blocking:** Does $\mathcal{Z}$ block all paths into $X$ ($X \leftarrow \dots \rightarrow Y$)?
+> - [x] **No Collider Activation:** Does $\mathcal{Z}$ avoid opening closed collider paths?
+> - [x] **Full Observability:** Are all variables in $\mathcal{Z}$ measured in your data?
+
+---
+
+## 27. Regression implementation after identification
 
 Suppose the DAG implies that $C$ is a sufficient adjustment variable for the total effect of $X$ on $Y$.
 
@@ -2607,7 +2979,7 @@ $$ \tau^{(s)} = \overline{\mu}^{(s)}(x_1) - \overline{\mu}^{(s)}(x_0) $$
 
 ---
 
-## 27. DAG software
+## 28. DAG software
 
 The book uses `dagitty` to inspect adjustment sets.
 
@@ -2669,7 +3041,7 @@ print("Edges:", G.edges())
 
 ---
 
-## 28. CRM application: targeting confounding
+## 29. CRM application: targeting confounding
 
 Let $A$ be retention campaign, $Y$ future revenue or churn, and $L$ observed customer risk and history.
 
@@ -2683,7 +3055,7 @@ Conditioning on $L$ closes it under the assumption that $L$ contains all relevan
 
 ---
 
-## 29. CRM application: campaign engagement as mediator
+## 30. CRM application: campaign engagement as mediator
 
 Suppose $A$ is campaign sent, $M$ post-campaign engagement, and $Y$ revenue.
 
@@ -2693,7 +3065,7 @@ For the total campaign effect, conditioning on $M$ blocks part of the effect.
 
 ---
 
-## 30. CRM application: openers-only analysis
+## 31. CRM application: openers-only analysis
 
 Suppose email opening depends on both campaign delivery and latent digital attention:
 
@@ -2703,7 +3075,7 @@ Analyzing only openers conditions on $O$ and opens the path $A \rightarrow O \le
 
 ---
 
-## 31. CRM application: support-contact selection
+## 32. CRM application: support-contact selection
 
 Suppose both service severity and customer persistence cause a support contact:
 
@@ -2713,7 +3085,7 @@ Restricting analysis to customers who contacted support conditions on $C$, openi
 
 ---
 
-## 32. Implications for CausalOps
+## 33. Implications for CausalOps
 
 | A06 concept | CausalOps implication |
 |---|---|
@@ -2730,7 +3102,7 @@ Restricting analysis to customers who contacted support conditions on $C$, openi
 | Multicollinearity | Identifiability warning rather than automatic variable deletion |
 | Simulation | Verify bias under alternative conditioning sets |
 
-### 32.1 Path audit artifact
+### 33.1 Path audit artifact
 
 ```yaml
 exposure: campaign_sent
@@ -2753,17 +3125,17 @@ paths:
     action: do_not_open
 ```
 
-### 32.2 Control-role validation
+### 33.2 Control-role validation
 
 Before a variable enters the model, CausalOps should record its structural role relative to exposure, outcome, and estimand.
 
-### 32.3 Selection audit
+### 33.3 Selection audit
 
 The platform should audit filtering rules to prevent implicit collider conditioning.
 
 ---
 
-## 33. Common errors exposed by A06
+## 34. Common errors exposed by A06
 
 1. Adding every predictor.
 2. Defining confounders from correlation.
@@ -2780,7 +3152,7 @@ The platform should audit filtering rules to prevent implicit collider condition
 
 ---
 
-## 34. Lecture takeaways
+## 35. Lecture takeaways
 
 1. Conditioning changes statistical paths through which information flows.
 2. A fork is open until its common cause is conditioned on.
@@ -2805,7 +3177,7 @@ The platform should audit filtering rules to prevent implicit collider condition
 
 ---
 
-## 35. Review questions
+## 36. Review questions
 
 Below is the list of 24 review questions covered in this section:
 

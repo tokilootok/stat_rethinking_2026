@@ -2885,10 +2885,10 @@ cat("Is {C, P} valid (includes precision predictor)? ", isAdjustmentSet(g, expos
 ```
 
 **Output Analysis:**
-* `{C}` is valid and minimal.
-* `{C, M}` is **invalid** for total effect because it violates Property 1 (No Descendants).
-* `{C, S}` is **invalid** because it violates Property 3 (No Collider Activation).
-* `{C, P}` is **valid and optimal**: $P$ improves statistical precision for $Y$ without introducing bias.
+* **`{C}` (Valid & Minimal):** $C$ is a pre-treatment confounder on the backdoor path $X \leftarrow C \rightarrow Y$. Adjusting for $C$ closes this backdoor path and identifies the total causal effect. Removing $C$ leaves the path open, making $\{C\}$ minimal.
+* **`{C, M}` (Invalid for Total Effect — Violates Property 1: No Descendants):** $M$ is a mediator on the causal chain $X \rightarrow M \rightarrow Y$. Conditioning on $M$ blocks part of the causal mechanism, failing to capture the total effect.
+* **`{C, S}` (Invalid — Violates Property 3: No Collider Activation):** $S$ is a collider receiving directed edges from both $X$ and $Y$ ($X \rightarrow S \leftarrow Y$). Conditioning on $S$ opens a previously closed non-causal path, introducing collider (selection) bias.
+* **`{C, P}` (Valid & Optimal):** $P$ is an exogenous pre-treatment predictor of $Y$ ($P \rightarrow Y$) independent of $X$. Adjusting for $\{C, P\}$ preserves identification while absorbing residual variance in $Y$, increasing the statistical precision of $\hat{\beta}_X$.
 
 ---
 

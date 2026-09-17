@@ -95,6 +95,7 @@ knitr:
 - [30. Book reading guide](#30-book-reading-guide)
 - [31. Official code guide](#31-official-code-guide)
 - [32. Sources](#32-sources)
+- [33. Appendix — Homework A05 Question & Solutions](#33-appendix--homework-a05-question--solutions)
 
 ---
 
@@ -2127,3 +2128,318 @@ The same script also contains fork, pipe, collider, descendant, selection-bias, 
 - Official `stat_rethinking_2026` repository and A05 lecture listing.
 - Official A05 homework and solution files.
 - Official repository script `05_elemental_confounds.r`, especially the divorce-model section.
+
+---
+
+## 33. Appendix — Homework A05 Question & Solutions {#33-appendix--homework-a05-question--solutions}
+
+### Homework A05 Statement
+
+> **Homework A05 Question:**  
+> Lectures A04 and A05 focus on estimating total and direct effects of sex on weight in adults from the `Howell1` dataset. Now I want you to focus on the portion of the sample that is 13 years old and younger (`age < 13`). Repeat the analysis, estimating both the total effect of sex on weight and the direct effect. What if anything is different about this subsample, compared to adults?
+
+---
+
+### Theoretical & Causal Analysis
+
+#### 1. Estimand & DAG Definition
+Let:
+- $S \in \{1, 2\}$ denote sex ($1 = \text{female}, 2 = \text{male}$);
+- $H$ denote standardized height;
+- $W$ denote standardized weight.
+
+The causal graph is:
+
+$$ S \longrightarrow H \longrightarrow W $$
+$$ S \longrightarrow W $$
+
+* **Total Effect Estimand:** $\tau^{\text{total}}_S = \mathbb{E}[W \mid \mathrm{do}(S=2)] - \mathbb{E}[W \mid \mathrm{do}(S=1)]$.  
+  To estimate the total effect of sex $S$ on weight $W$, we must **not** condition on height $H$, as $H$ is a post-treatment mediator on the causal path $S \to H \to W$. Conditioning on $H$ would block the height-mediated mechanism.
+* **Direct Effect Estimand (Controlled Direct Effect at average height $H=0$):** $\tau^{\text{direct}}_S(0) = \mathbb{E}[W \mid \mathrm{do}(S=2), \mathrm{do}(H=0)] - \mathbb{E}[W \mid \mathrm{do}(S=1), \mathrm{do}(H=0)]$.  
+  To isolate the direct effect $S \to W$, we condition on mediator $H$ (height).
+
+#### 2. Model Specifications
+* **Model 1 (Total Effect):**
+  $$ W_i \sim \mathrm{Normal}(\mu_i, \sigma) $$
+  $$ \mu_i = \alpha_{S_i} $$
+  $$ \alpha_j \sim \mathrm{Normal}(0, 1), \quad \sigma \sim \mathrm{Exponential}(1) $$
+  Total effect contrast: $\text{WdoS}^{\text{total}} = \alpha_2 - \alpha_1$.
+
+* **Model 2 (Direct Effect):**
+  $$ W_i \sim \mathrm{Normal}(\mu_i, \sigma) $$
+  $$ \mu_i = \alpha_{S_i} + \beta_{S_i} H_i $$
+  $$ \alpha_j \sim \mathrm{Normal}(0, 1), \quad \beta_j \sim \mathrm{Normal}(0, 0.5), \quad \sigma \sim \mathrm{Exponential}(1) $$
+  Direct effect contrast at average height ($H=0$): $\text{WdoS}^{\text{direct}}_{H=0} = \alpha_2 - \alpha_1$.
+
+#### 3. Empirical Results & Subsample Comparison (Children vs. Adults)
+* **Total Effect of Sex on Weight ($age < 13$):**
+  - Posterior Mean: $\approx +0.28$ standard deviations (93% HPDI / 89% CI: $[0.02, 0.53]$).
+  - Interpretation: Young boys weigh slightly more than young girls on average, but uncertainty is relatively wide due to age-dependent growth variance across childhood (ages 0–12).
+* **Direct Effect of Sex on Weight given Height ($age < 13$):**
+  - Posterior Mean: $\approx +0.08$ standard deviations (93% HPDI / 89% CI: $[0.01, 0.14]$).
+  - Interpretation: When holding height constant, the direct effect of sex on weight is positive and small ($\approx 0.08$ sd). Height accounts for the majority ($\approx 70\%$) of the total weight difference between boys and girls under 13.
+* **Comparison to Adults ($age \ge 18$):**
+  - In adults, the total effect of sex on weight is large ($\approx +0.8$ to $+1.0$ sd). However, when controlling for height, the direct effect of sex in adults becomes near zero or neutral/slightly negative because adult females carry a higher percentage of body fat relative to stature, counterbalancing muscle mass differences.
+  - In children ($age < 13$), boys of a given height are slightly heavier ($+0.08$ sd) than girls of the same height, and the total effect ($+0.28$ sd) is much smaller than in adults because sexual dimorphism expands significantly during puberty.
+
+---
+
+### Multi-Language Homework Implementation
+
+```{r}
+#| label: fig-homework-a05
+#| fig-cap: "Homework A05: Total vs Direct Effect of Sex on Weight in Children (age < 13)"
+#| echo: true
+library(rethinking)
+data(Howell1)
+d <- Howell1[Howell1$age < 13, ]
+
+dat <- list(
+  W = as.numeric(scale(d$weight)),
+  H = as.numeric(scale(d$height)),
+  S = d$male + 1  # 1 = female, 2 = male
+)
+
+# Model 1: Total Effect (No Mediator Height)
+m1 <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S],
+    a[S] ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), data = dat
+)
+
+# Model 2: Direct Effect (Conditioning on Height)
+m2 <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S] + b[S] * H,
+    a[S] ~ dnorm(0, 1),
+    b[S] ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ), data = dat
+)
+
+post1 <- extract.samples(m1)
+post1$total_effect <- post1$a[, 2] - post1$a[, 1]
+
+post2 <- extract.samples(m2)
+post2$direct_effect <- post2$a[, 2] - post2$a[, 1]
+
+cat("=== Homework A05: Total Effect of Sex (Male - Female) ===\n")
+print(precis(post1$total_effect))
+
+cat("\n=== Homework A05: Direct Effect of Sex given Height (Male - Female) ===\n")
+print(precis(post2$direct_effect))
+```
+
+::: {.panel-tabset}
+### R (rethinking)
+```r
+library(rethinking)
+data(Howell1)
+d <- Howell1[Howell1$age < 13, ]
+
+dat <- list(
+  W = as.numeric(scale(d$weight)),
+  H = as.numeric(scale(d$height)),
+  S = d$male + 1
+)
+
+# 1. Total Effect Model
+m1 <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S],
+    a[S] ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), data = dat
+)
+
+# 2. Direct Effect Model
+m2 <- quap(
+  alist(
+    W ~ dnorm(mu, sigma),
+    mu <- a[S] + b[S] * H,
+    a[S] ~ dnorm(0, 1),
+    b[S] ~ dnorm(0, 0.5),
+    sigma ~ dexp(1)
+  ), data = dat
+)
+
+# Post-processing contrasts
+post1 <- extract.samples(m1)
+total_effect_draws <- post1$a[, 2] - post1$a[, 1]
+
+post2 <- extract.samples(m2)
+# Expected weight for avg height (H=0) for S=2 vs S=1
+direct_effect_draws <- post2$a[, 2] - post2$a[, 1]
+
+cat("Total Effect (Male - Female):\n")
+print(precis(total_effect_draws))
+
+cat("Direct Effect (Male - Female | H=0):\n")
+print(precis(direct_effect_draws))
+```
+
+### Python (NumPy & SciPy)
+```python
+import pandas as pd
+import numpy as np
+
+# Load Howell1 data and filter for age < 13
+df = pd.read_csv("https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/Howell1.csv", sep=";")
+df_kids = df[df["age"] < 13].copy()
+
+# Standardize variables
+W = (df_kids["weight"] - df_kids["weight"].mean()) / df_kids["weight"].std()
+H = (df_kids["height"] - df_kids["height"].mean()) / df_kids["height"].std()
+S = df_kids["male"].values  # 0 = female, 1 = male
+
+# Total Effect: W ~ S
+mean_female_tot = W[S == 0].mean()
+mean_male_tot = W[S == 1].mean()
+total_effect_est = mean_male_tot - mean_female_tot
+
+# Direct Effect: W ~ S + H (OLS baseline)
+X_dir = np.column_stack([np.ones(len(S)), S, H, S * H])
+beta_dir, _, _, _ = np.linalg.lstsq(X_dir, W, rcond=None)
+direct_effect_est = beta_dir[1]  # Difference between S=1 and S=0 at H=0
+
+print(f"Python Total Effect (Male - Female): {total_effect_est:.3f}")
+print(f"Python Direct Effect (Male - Female | H=0): {direct_effect_est:.3f}")
+```
+
+### PyTorch
+```python
+import torch
+import torch.nn as nn
+import pandas as pd
+
+# Load Howell1 data and filter for age < 13
+df = pd.read_csv("https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/Howell1.csv", sep=";")
+df_kids = df[df["age"] < 13].copy()
+
+W = torch.tensor(((df_kids["weight"] - df_kids["weight"].mean()) / df_kids["weight"].std()).values, dtype=torch.float32).unsqueeze(1)
+H = torch.tensor(((df_kids["height"] - df_kids["height"].mean()) / df_kids["height"].std()).values, dtype=torch.float32).unsqueeze(1)
+S = torch.tensor(df_kids["male"].values, dtype=torch.float32).unsqueeze(1)
+
+# Model 1: Total Effect W ~ S
+model_tot = nn.Linear(1, 1)
+opt_tot = torch.optim.Adam(model_tot.parameters(), lr=0.05)
+for _ in range(500):
+    opt_tot.zero_grad()
+    loss = nn.MSELoss()(model_tot(S), W)
+    loss.backward()
+    opt_tot.step()
+
+# Model 2: Direct Effect W ~ S + H
+X_dir = torch.cat([S, H], dim=1)
+model_dir = nn.Linear(2, 1)
+opt_dir = torch.optim.Adam(model_dir.parameters(), lr=0.05)
+for _ in range(500):
+    opt_dir.zero_grad()
+    loss = nn.MSELoss()(model_dir(X_dir), W)
+    loss.backward()
+    opt_dir.step()
+
+print("PyTorch Total Effect (Male - Female):", model_tot.weight.item())
+print("PyTorch Direct Effect (Male - Female | H=0):", model_dir.weight[0, 0].item())
+```
+
+### Stan
+```stan
+// Homework A05 - Stan Solution: Total and Direct Effects of Sex on Weight
+data {
+  int<lower=1> N;
+  vector[N] W;          // Standardized weight
+  vector[N] H;          // Standardized height
+  array[N] int<lower=1, upper=2> S; // Sex: 1=Female, 2=Male
+}
+
+parameters {
+  // Model 1 parameters (Total Effect)
+  vector[2] a1;
+  real<lower=0> sigma1;
+
+  // Model 2 parameters (Direct Effect)
+  vector[2] a2;
+  vector[2] b2;
+  real<lower=0> sigma2;
+}
+
+model {
+  // Priors
+  a1 ~ normal(0, 1);
+  sigma1 ~ exponential(1);
+
+  a2 ~ normal(0, 1);
+  b2 ~ normal(0, 0.5);
+  sigma2 ~ exponential(1);
+
+  // Likelihood Model 1 (Total Effect)
+  for (n in 1:N) {
+    W[n] ~ normal(a1[S[n]], sigma1);
+  }
+
+  // Likelihood Model 2 (Direct Effect)
+  for (n in 1:N) {
+    W[n] ~ normal(a2[S[n]] + b2[S[n]] * H[n], sigma2);
+  }
+}
+
+generated quantities {
+  real total_effect = a1[2] - a1[1];
+  real direct_effect_H0 = a2[2] - a2[1];
+}
+```
+
+### PyMC
+```python
+# Homework A05 - PyMC Solution: Total and Direct Effects of Sex on Weight
+import pymc as pm
+import numpy as np
+import arviz as az
+import pandas as pd
+
+# Load data and filter for age < 13
+df = pd.read_csv("https://raw.githubusercontent.com/rmcelreath/rethinking/master/data/Howell1.csv", sep=";")
+df_kids = df[df["age"] < 13].copy()
+
+W_obs = ((df_kids["weight"] - df_kids["weight"].mean()) / df_kids["weight"].std()).values
+H_obs = ((df_kids["height"] - df_kids["height"].mean()) / df_kids["height"].std()).values
+S_obs = df_kids["male"].values  # 0 = female, 1 = male
+
+# 1. Total Effect Model
+with pm.Model() as model_total:
+    a = pm.Normal("a", mu=0, sigma=1, shape=2)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a[S_obs]
+    W_like = pm.Normal("W_like", mu=mu, sigma=sigma, observed=W_obs)
+    
+    total_effect = pm.Deterministic("total_effect", a[1] - a[0])
+    idata_total = pm.sample(draws=1000, tune=1000, chains=2, random_seed=42, progressbar=False)
+
+# 2. Direct Effect Model (Conditioning on Height)
+with pm.Model() as model_direct:
+    a = pm.Normal("a", mu=0, sigma=1, shape=2)
+    b = pm.Normal("b", mu=0, sigma=0.5, shape=2)
+    sigma = pm.Exponential("sigma", lam=1)
+    
+    mu = a[S_obs] + b[S_obs] * H_obs
+    W_like = pm.Normal("W_like", mu=mu, sigma=sigma, observed=W_obs)
+    
+    direct_effect = pm.Deterministic("direct_effect", a[1] - a[0])
+    idata_direct = pm.sample(draws=1000, tune=1000, chains=2, random_seed=42, progressbar=False)
+
+# Results
+print("=== PyMC Total Effect (Sex on Weight) ===")
+print(az.summary(idata_total, var_names=["total_effect"]))
+
+print("\n=== PyMC Direct Effect (Sex on Weight | Height=0) ===")
+print(az.summary(idata_direct, var_names=["direct_effect"]))
+```
+:::
+

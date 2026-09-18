@@ -116,6 +116,10 @@ knitr:
   - [43.2 The Wald Estimator (The Ratio)](#432-the-wald-estimator-the-ratio)
   - [43.3 Two-Stage Least Squares (2SLS)](#433-two-stage-least-squares-2sls)
   - [43.4 Critical Failure Modes in Implementation](#434-critical-failure-modes-in-implementation)
+- [44. Annex — Mind Map & Comprehensive Course Map (Sections 1 to 38)](#44-annex--mind-map--comprehensive-course-map-sections-1-to-38)
+  - [44.1 Mind Map Mermaid (Format Arborescent)](#441-mind-map-mermaid-format-arborescent)
+  - [44.2 Diagramme de Flux Structuré (Mermaid Flowchart)](#442-diagramme-de-flux-structure-mermaid-flowchart)
+  - [44.3 Synthèse des 38 Paragraphes](#443-synthese-des-38-paragraphes)
 
 ---
 
@@ -1339,6 +1343,21 @@ Resolving post-treatment complexity requires specialized causal inference framew
 
 Ordinary multivariable regression cannot resolve time-varying confounding affected by prior treatment.
 
+### Bayesian Equivalents of G-Methods
+
+Given the Bayesian framework of *Statistical Rethinking*, it is essential to clarify how these $g$-methods translate into Bayesian modeling:
+
+1. **Bayesian G-Computation**:
+   - **Direct Equivalence & Preferred Standard**: Bayesian G-computation is the most direct and natural Bayesian equivalent for time-varying causal inference.
+   - **Mechanism**: A full Bayesian parametric or non-parametric model is fitted for outcome $Y$ and time-varying confounders $L$ given treatment histories. For each MCMC posterior draw $\boldsymbol{\theta}^{(s)}$, potential outcomes $Y^{(s)}(\bar{a})$ are simulated under counterfactual intervention regimes (e.g., setting $X_1 = a_1, X_2 = a_2$). Averaging predictions over posterior draws yields the full posterior distribution of the Average Treatment Effect (ATE) with exact 95% credibility intervals, fully propagating model uncertainty.
+
+2. **Bayesian Marginal Structural Models (MSMs / Bayesian IPW)**:
+   - **Equivalence with Nuance**: Frequentist MSMs rely on Inverse Probability Weighting (IPW) using propensity scores $e(X) = P(A=1 \mid L)$.
+   - **Bayesian Implementation**: Bayesian MSMs use a two-stage MCMC approach or quasi-Bayesian weighting to propagate propensity score uncertainty into the marginal outcome model. However, Bayesian practitioners (e.g., Saarela et al., Keil et al.) generally prefer **Bayesian G-computation** or **Bayesian Additive Regression Trees (BART)** over IPW-based MSMs to avoid weight instability when propensity scores approach 0 or 1.
+
+3. **Bayesian G-Estimation (Structural Nested Models)**:
+   - Structural Nested Models can be estimated bayesianly by placing priors directly on structural causal interaction parameters, though Bayesian G-computation remains the primary choice in applied Bayesian causal inference.
+
 ---
 
 ## 17. Randomization does not make every control safe
@@ -1391,11 +1410,21 @@ Consider the DAG where $Z$ is a common cause of exposure $X$ and outcome $Y$, bu
 $$W \longrightarrow Z \longrightarrow X \longrightarrow Y$$
 $$W \longrightarrow Y$$
 
+```{mermaid}
+%%| label: fig-table2-dag
+%%| fig-cap: "Table 2 Fallacy DAG: Z blocks backdoor for X, but Z itself is confounded by unobserved W"
+graph TD
+    W["W (Unobserved Social Status)"] --> Z["Z (Control Variable)"]
+    W --> Y["Y (Outcome)"]
+    Z --> X["X (Primary Exposure)"]
+    X --> Y
+```
+
 ```
        W (Unobserved Social Status)
-      ╱ ╲
-     ▼   ▼
-     Z ─► X ─► Y
+      ╱                             ╲
+     ▼                               ▼
+     Z ─────────────► X ───────────► Y
 ```
 
 To estimate the causal effect of $X$ on $Y$, we fit:
@@ -1456,6 +1485,35 @@ Simulation converts abstract theoretical claims about backdoor paths, colliders,
 
 Below is a standardized, production-ready R simulation template designed to compare candidate control sets against any proposed DAG ground truth.
 
+### Algorithmic Breakdown of the Simulation
+
+The algorithm follows a 4-step Monte Carlo validation pipeline:
+
+1. **Step 1: Initialization & Parameters Definition**
+   - Sets simulation parameters: `n_sim` (number of Monte Carlo replicates, default 1,000), `N` (sample size per dataset, default 200), and `true_tau` (ground-truth causal effect $\tau = 0.5$).
+   - Pre-allocates memory for storing point estimates $\widehat{\beta}_X$ across specifications (`unadjusted`, `good_control`, `bad_control`).
+   - Fixes random seed (`set.seed(2026)`) for exact reproducibility.
+
+2. **Step 2: Structural Data-Generating Process (SCM Sampling)**
+   Inside a loop running `n_sim` times, synthetic data is generated directly from the structural causal equations:
+   - $U \sim \text{Normal}(0, 1)$ (Unobserved Confounder between $X$ and $Y$)
+   - $Z \sim \text{Normal}(0, 1)$ (Candidate Control / Instrument)
+   - $X = 0.6 Z + 0.5 U + \varepsilon_X$ (Exposure driven by instrument $Z$ and confounder $U$)
+   - $Y = \tau X + 0.7 U + \varepsilon_Y$ (Outcome driven by true causal effect $\tau X$ and confounder $U$)
+
+3. **Step 3: Fitting Candidate Models & Parameter Extraction**
+   Fits 3 competing specifications on each synthetic dataset and extracts $\widehat{\beta}_X$:
+   - `m_unadjusted`: $Y \sim X$ (Evaluates unadjusted confounding bias from omitting $U$).
+   - `m_good_control`: $Y \sim X + U$ (Oracle benchmark model, adjusting for $U$).
+   - `m_bad_control`: $Y \sim X + Z$ (Evaluates bias amplification / precision loss from controlling for instrument $Z$).
+
+4. **Step 4: Metric Aggregation & Comparative Performance Matrix**
+   Aggregates the stored vectors of estimates across all $n\_sim$ iterations to compute empirical performance metrics:
+   - **Mean Estimate**: $\overline{\widehat{\beta}}_X = \frac{1}{R}\sum_{i=1}^R \widehat{\beta}_{X,i}$
+   - **Empirical Bias**: $\mathrm{Bias} = \overline{\widehat{\beta}}_X - \tau$
+   - **Standard Deviation (Empirical SE)**: $\mathrm{SD} = \sqrt{\frac{1}{R-1}\sum_{i=1}^R (\widehat{\beta}_{X,i} - \overline{\widehat{\beta}}_X)^2}$
+   - **Root Mean Squared Error (RMSE)**: $\mathrm{RMSE} = \sqrt{\mathrm{Bias}^2 + \mathrm{SD}^2}$
+
 ```r
 # ==============================================================================
 # General Monte Carlo Simulation Template for Evaluating Control Sets
@@ -1512,6 +1570,22 @@ simulate_control_benchmark <- function(n_sim = 1000, N = 200, true_tau = 0.5) {
 # Run Benchmark
 simulate_control_benchmark(n_sim = 1000, N = 200, true_tau = 0.5)
 ```
+
+### Connecting Simulation Results to Your Real Observational Dataset
+
+Once the Monte Carlo simulation benchmark is complete, how do we bridge the gap between synthetic SCM results and real-world observational data where $\tau$ and $U$ are unobserved?
+
+1. **Validating Model Specification for Real Data**:
+   - The primary purpose of the simulation is to **test candidate DAG hypotheses**.
+   - If the simulation demonstrates that Model A (`Y ~ X + C`) achieves zero bias while Model B (`Y ~ X + C + Z`) suffers from bias amplification or precision loss under the hypothesized DAG, we establish that **Model A is the structurally valid adjustment set**.
+   - We then fit **Model A** on the real observational dataset to obtain the empirical causal estimate $\widehat{\beta}_{X, \text{real}}$.
+
+2. **Diagnostic Empirical Checks on Real Data**:
+   - **Coefficient Shift vs Simulation Direction**: Compare how the estimated coefficient $\widehat{\beta}_X$ shifts when adding candidate control $Z$ in real data versus the simulation:
+     $$\Delta \widehat{\beta}_{\text{real}} = \widehat{\beta}_{X, \text{adjusted}} - \widehat{\beta}_{X, \text{unadjusted}}$$
+     If adding $Z$ in the real dataset shifts $\widehat{\beta}_{X, \text{real}}$ in the exact direction predicted by collider bias or bias amplification in the simulation, it provides empirical diagnostic evidence that $Z$ acts as a bad control in the real data.
+   - **Variance & Standard Error Inflation**: Compare the standard error $\mathrm{SE}(\widehat{\beta}_X)$ in real data before and after adding $Z$. If adding $Z$ inflates $\mathrm{SE}(\widehat{\beta}_X)$ without changing the point estimate, it confirms empirically that $Z$ acts as a precision parasite.
+   - **Negative Controls / Placebo Tests**: Apply the validated model specification to a known negative control outcome $Y_{\text{negative}}$ (where true $\tau = 0$) or a placebo treatment $X_{\text{placebo}}$ in the real dataset. If the validated model yields $\widehat{\beta}_{\text{placebo}} \approx 0$, it provides empirical confidence that unobserved confounding has been effectively controlled in the real data.
 
 ---
 
@@ -1740,7 +1814,11 @@ Understanding temporal measurement relative to treatment assignment is critical:
   Pre-Campaign Risk R_0 ──► Campaign Send A ───────► Post-Campaign Risk R_1
   │                         │                        │
   └─────────────────────────┼────────────────────────┴──► Churn / Revenue Y
-                            ▼
+                            │                                     ▲
+                            └─────────────────────────────────────┤ (Unobserved Sentiment U)
+                                                                  │
+                                                                  ▼
+                                                          Post-Campaign Risk R_1
 ```
 
 1. **Pre-Campaign Baseline Risk Score ($R_0$)**:
@@ -1749,9 +1827,21 @@ Understanding temporal measurement relative to treatment assignment is critical:
    - **Action**: **MUST ADJUST for $R_0$** to block the baseline backdoor path.
 
 2. **Post-Campaign Risk Score ($R_1$)**:
-   Calculated *after* campaign deployment. Treatment $A$ reduces post-campaign risk ($A \rightarrow R_1$), and $R_1$ shares unobserved customer sentiment $U$ with churn ($R_1 \leftarrow U \rightarrow Y$).
-   - **Role**: $R_1$ is both a **mediator** and a **collider** ($A \rightarrow R_1 \leftarrow U \rightarrow Y$).
-   - **Action**: **NEVER ADJUST for $R_1$** in ordinary regression. Adjusting for $R_1$ blocks campaign mediation and opens a collider backdoor path.
+   Calculated *after* campaign deployment. Treatment $A$ reduces post-campaign risk ($A \rightarrow R_1 \rightarrow Y$), while $R_1$ is also influenced by unobserved customer sentiment/satisfaction $U$ ($R_1 \leftarrow U \rightarrow Y$).
+   - **Role**: $R_1$ is simultaneously a **mediator** ($A \rightarrow R_1 \rightarrow Y$) and a **collider** ($A \rightarrow R_1 \leftarrow U \rightarrow Y$).
+   - **Action**: **NEVER ADJUST for $R_1$** in standard regression ($Y \sim A + R_0 + R_1$).
+
+### The Double Mechanism Breakdown when Controlling for $R_1$
+
+Adjusting for post-campaign risk score $R_1$ invalidates causal identification via two distinct mechanisms:
+
+1. **Mediation Blocking (Indirect Effect Zeroed Out)**:
+   $R_1$ lies on the causal path $A \rightarrow R_1 \rightarrow Y$. Conditioning on $R_1$ blocks the indirect causal effect of campaign $A$ operating through the reduction of customer risk score.
+2. **Collider Path Activation ($U$ Injection)**:
+   $R_1$ is a collider on the non-causal path $A \rightarrow R_1 \leftarrow U \rightarrow Y$. Conditioning on $R_1$ unblocks this path, inducing a spurious conditional association between treatment $A$ and unobserved customer sentiment $U$. This introduces unobserved confounding bias into the estimated coefficient of $A$.
+
+> [!WARNING]
+> **Rule of Thumb**: Adjust for pre-treatment covariates ($R_0$) to control for confounding, but **never adjust for post-treatment mediators/colliders ($R_1$)** when estimating total causal treatment effects.
 
 ---
 
@@ -1871,6 +1961,14 @@ Rather than including $Z$ as an ordinary control in OLS, $Z$ must be used as an 
 $$\widehat{\beta}_{IV} = \frac{\mathrm{Cov}(Y, Z)}{\mathrm{Cov}(A, Z)}$$
 
 Using $Z$ as an instrument purges the unobserved confounding $U$, yielding an unbiased estimate of the true campaign effect.
+
+### Do Tree-Based ML Models (Bagging, Boosting, Random Forests) Suffer from Bias Amplification?
+
+**Yes, non-parametric tree models (e.g., Random Forests, XGBoost, LightGBM) suffer from the exact same structural bias amplification—and often worsen it.**
+
+1. **Structural DAG Property (Not an OLS Artifact)**: Bias amplification is a mathematical consequence of the causal graph ($Z \rightarrow A \leftarrow U \rightarrow Y$). When any model conditions on $Z$ (whether via linear projection in OLS or recursive feature splitting in Decision Trees), it partials out the exogenous $Z$-driven variation in $A$.
+2. **Aggressive Feature Splitting (Worsened Amplification)**: Flexible boosting algorithms excel at non-linear partitioning. When $Z$ is included as a feature in $Y \sim f(A, Z)$, trees split heavily on $Z$. Within the resulting leaf nodes (where $Z$ is homogeneous), remaining treatment variation $A \mid Z$ is driven almost purely by unobserved confounder $U$, maximizing confounding bias in SHAP/PDP estimates.
+3. **Correct ML Formulation**: To utilize machine learning with instrument-like variables, do not pass $Z$ as a control feature in standard supervised prediction. Instead, deploy specialized causal ML frameworks such as **Double Machine Learning (DML)** or **Instrumental Forests** (`grf::instrumental_forest`).
 
 ---
 
@@ -2340,4 +2438,179 @@ $$\widehat{\beta}_{2SLS} = (X^T Z (Z^T Z)^{-1} Z^T X)^{-1} X^T Z (Z^T Z)^{-1} Z^
 
 - **Weak Instruments:** If the correlation between $Z$ and $X$ is weak, the denominator in the Wald ratio approaches zero. This amplifies any tiny violations of the exclusion restriction, leading to massive asymptotic bias and inflated standard errors.
 - **Monotonicity (LATE):** In heterogeneous populations with binary compliance, IV estimates the Local Average Treatment Effect (LATE)—the effect solely on the "compliers" (those whose treatment status was actually shifted by the instrument). It assumes no "defiers" exist.
+
+---
+
+## 44. Annex — Mind Map & Comprehensive Course Map (Sections 1 to 38)
+
+Cette annexe présente la carte mentale (*mind map*) et la synthèse visuelle des **38 premiers paragraphes** du cours **A07 — Good and Bad Controls**.
+
+### 44.1 Mind Map Mermaid (Format Arborescent)
+
+```{mermaid}
+%%| label: fig-mindmap-a07
+%%| fig-cap: "Carte mentale arborescente des 38 premiers paragraphes"
+mindmap
+  root((A07: Good & Bad Controls))
+    Foundations["I. Fondations & Mécanique (Sec 1-6)"]
+      S01["1. Thèse principale: Les contrôles peuvent réduire le biais OU détruire la précision"]
+      S02["2. Deux questions distinctes: Estimand causal vs Performance prédictive"]
+      S03["3. Définition du contrôle: Maintenir constant statistiquement"]
+      S04["4. Deux dimensions d'évaluation: Biais (exactitude) & Précision (variance)"]
+      S05["5. Bon contrôle: Cause commune (ferme le backdoor path)"]
+      S06["6. Booster de précision: Cause de Y seule (réduit sigma^2)"]
+    BadControls["II. Les 4 Mauvais Contrôles (Sec 7-14)"]
+      S07["7. Bad Control 1: Confondre en post-traitement (médiateur + collisionneur)"]
+      S08["8. Bloquer la médiation & ouvrir des chemins de collision simultanément"]
+      S09["9. Bad Control 2: Biais du descendant de l'effet / Cas-témoins (fuite d'info)"]
+      S10["10. Descendants du résultat: Altèrent l'échantillonnage et la cible causale"]
+      S11["11. Bad Control 3: Parasite de précision (Z -> X -> Y absorbe la variance)"]
+      S12["12. Pourquoi prédire X nuit à la précision: Inflation du VIF"]
+      S13["13. Bad Control 4: Amplificateur de biais (Variable instrumentale Z dans OLS)"]
+      S14["14. Vue résidualisée (FWL): Supprime la variance propre, concentre le biais U"]
+    CausalRules["III. Règles Causales & Taxonomie (Sec 15-19)"]
+      S15["15. Le pré-traitement n'est pas suffisant (Risque de M-bias et d'instruments)"]
+      S16["16. Post-traitement: Avertissement vs confusion dynamique (G-méthodes)"]
+      S17["17. Randomisation: Invalidée si ajustement sur collisionneur post-traitement"]
+      S18["18. Sophisme de la Table 2: Chaque coefficient requiert son propre DAG"]
+      S19["19. Tableau de classification pratique des contrôles"]
+    SimOverfitting["IV. Simulation & Surajustement (Sec 20-25)"]
+      S20["20. Simulation: L'outil décisif (SCM à vérité terrain connue)"]
+      S21["21. Template de simulation R: Comparaison Monte Carlo des modèles"]
+      S22["22. Sélection causale != Sélection de features (Objectifs opposés)"]
+      S23["23. Principe copernicien: L'échantillon n'est qu'un tirage bruité du DGP"]
+      S24["24. Surajustement (Variance) vs Biais de mauvais contrôle (Structure)"]
+      S25["25. Démo polynômiale: Chute du MSE interne vs explosion hors-échantillon"]
+    PredictiveVsCausal["V. Métriques Prédictives vs Causalité (Sec 26-30)"]
+      S26["26. LOO-CV & PSIS: Mesurent la densité prédictive (elpd_LOO, Pareto k)"]
+      S27["27. Erreur en-échantillon vs hors-échantillon: Courbe en U de la déviance"]
+      S28["28. Régularisation: Shrinkage gaussien réduisant la variance, sans réparer un mauvais DAG"]
+      S29["29. WAIC & PSIS: Approximations bayésiennes du risque de surajustement"]
+      S30["30. Le paradoxe prédictif: LOO/WAIC récompensent les collisionneurs et les fuites"]
+    CRMApplications["VI. Applications CRM & CausalOps (Sec 31-38)"]
+      S31["31. Risk-Score CRM: Baseline R0 (Confondeur à ajuster) vs Post R1 (Collisionneur)"]
+      S32["32. Ouverture d'e-mail: Bloque la médiation & ouvre un biais de sélection (Brand Affinity)"]
+      S33["33. Éligibilité CRM: Règle V -> E <- R (Biais de sélection au sein des éligibles)"]
+      S34["34. Préférence de canal: Parasite de précision gonflant le VIF"]
+      S35["35. Règle d'assignation instrumentale: Amplifie le biais en OLS (Préférer 2SLS)"]
+      S36["36. CausalOps: Schémas de rôles, comparaison SCM & 2 scoreboards distincts"]
+      S37["37. Les 5 erreurs fréquentes révélées par A07"]
+      S38["38. Les 3 conclusions majeures du cours"]
+```
+
+### 44.2 Diagramme de Flux Structuré (Mermaid Flowchart)
+
+```{mermaid}
+%%| label: fig-flowchart-a07
+%%| fig-cap: "Diagramme de flux structuré des 38 premiers paragraphes"
+graph TD
+    %% Styling
+    classDef rootStyle fill:#2b2d42,stroke:#8d99ae,stroke-width:2px,color:#edf2f4,font-weight:bold;
+    classDef moduleStyle fill:#1d3557,stroke:#457b9d,stroke-width:2px,color:#f1faee,font-weight:bold;
+    classDef leafStyle fill:#f8f9fa,stroke:#dee2e6,stroke-width:1px,color:#212529;
+
+    Root["A07 — Good and Bad Controls<br/>(Sections 1 à 38)"]:::rootStyle
+
+    %% Branches
+    Root --> M1["I. Fondations & Mécanique<br/>(Sec 1-6)"]:::moduleStyle
+    Root --> M2["II. Les 4 Mauvais Contrôles<br/>(Sec 7-14)"]:::moduleStyle
+    Root --> M3["III. Règles & Taxonomie<br/>(Sec 15-19)"]:::moduleStyle
+    Root --> M4["IV. Simulation & Surajustement<br/>(Sec 20-25)"]:::moduleStyle
+    Root --> M5["V. Prédiction vs Causalité<br/>(Sec 26-30)"]:::moduleStyle
+    Root --> M6["VI. CRM & CausalOps<br/>(Sec 31-38)"]:::moduleStyle
+
+    %% Module 1 Leaves
+    M1 --> S1["1. Thèse: Contrôles réduisent biais ou détruisent précision"]:::leafStyle
+    M1 --> S2["2. Deux questions: Estimand causal != Fit prédictif"]:::leafStyle
+    M1 --> S3["3. Définition: Maintenir constant statistiquement"]:::leafStyle
+    M1 --> S4["4. Deux dimensions: Biais (exactitude) & Précision (SE)"]:::leafStyle
+    M1 --> S5["5. Bon contrôle: Cause commune (ferme backdoor)"]:::leafStyle
+    M1 --> S6["6. Booster précision: Cause de Y (réduit sigma^2)"]:::leafStyle
+
+    %% Module 2 Leaves
+    M2 --> S7["7. Bad Control 1: Post-traitement (médiateur + collisionneur)"]:::leafStyle
+    M2 --> S8["8. Bloquer médiation + ouvrir collision simultanément"]:::leafStyle
+    M2 --> S9["9. Bad Control 2: Descendant de Y / Cas-témoins"]:::leafStyle
+    M2 --> S10["10. Fuite d'information sur le résultat"]:::leafStyle
+    M2 --> S11["11. Bad Control 3: Parasite de précision (Z -> X -> Y)"]:::leafStyle
+    M2 --> S12["12. Inflation VIF par prédiction de X"]:::leafStyle
+    M2 --> S13["13. Bad Control 4: Amplificateur de biais (Z -> X <- U -> Y)"]:::leafStyle
+    M2 --> S14["14. Vue FWL: Résidualiser purge le propre, concentre U"]:::leafStyle
+
+    %% Module 3 Leaves
+    M3 --> S15["15. Pré-traitement pas garanti (M-bias, instruments)"]:::leafStyle
+    M3 --> S16["16. Post-traitement & G-méthodes pour confusion dynamique"]:::leafStyle
+    M3 --> S17["17. Randomisation cassée par ajustement post-RCT"]:::leafStyle
+    M3 --> S18["18. Sophisme Table 2: 1 modèle = 1 estimand causal"]:::leafStyle
+    M3 --> S19["19. Tableau de classification causale des contrôles"]:::leafStyle
+
+    %% Module 4 Leaves
+    M4 --> S20["20. Simulation SCM: Seule preuve à vérité terrain connue"]:::leafStyle
+    M4 --> S21["21. Template R: Benchmarking Monte Carlo"]:::leafStyle
+    M4 --> S22["22. Sélection causale != Sélection de features (LASSO/RF)"]:::leafStyle
+    M4 --> S23["23. Principe copernicien: Échantillon = tirage bruité"]:::leafStyle
+    M4 --> S24["24. Surajustement (Variance) vs Biais causal (Asymptotique)"]:::leafStyle
+    M4 --> S25["25. Démo polynômes: Drop MSE in-sample vs explosion out"]:::leafStyle
+
+    %% Module 5 Leaves
+    M5 --> S26["26. LOO-CV & PSIS: Densité prédictive & Pareto k"]:::leafStyle
+    M5 --> S27["27. Courbe U de la déviance hors-échantillon"]:::leafStyle
+    M5 --> S28["28. Régularisation: Réduit variance, ne fixe pas le DAG"]:::leafStyle
+    M5 --> S29["29. WAIC & PSIS: Approximations du surajustement"]:::leafStyle
+    M5 --> S30["30. Paradoxe: WAIC/LOO récompensent collisionneurs et fuites"]:::leafStyle
+
+    %% Module 6 Leaves
+    M6 --> S31["31. Risk-Score CRM: Baseline R0 (Ajuster) vs Post R1 (Eviter)"]:::leafStyle
+    M6 --> S32["32. Ouverture e-mail: Bloque l'effet + biaise par l'affinité"]:::leafStyle
+    M6 --> S33["33. Éligibilité CRM: V -> E <- R crée biais au sein des éligibles"]:::leafStyle
+    M6 --> S34["34. Préférence canal: Parasite de précision gonflant le VIF"]:::leafStyle
+    M6 --> S35["35. Assignation instrumentale: Biaise en OLS, utiliser 2SLS"]:::leafStyle
+    M6 --> S36["36. CausalOps: Rôles, simulation & 2 scoreboards"]:::leafStyle
+    M6 --> S37["37. 5 Erreurs majeures révélées par A07"]:::leafStyle
+    M6 --> S38["38. 3 Conclusions clés du cours"]:::leafStyle
+```
+
+### 44.3 Synthèse des 38 Paragraphes
+
+| # | Section | Rôle Causal / Concept | Essentiel (Takeaway Clef) |
+|---|---|---|---|
+| **1** | Main thesis | Vue globale | Ajouter un contrôle peut réduire le biais OU détruire la précision/augmenter le biais. |
+| **2** | Relationship to the book | 2 Questions | Séparer identification causale ($dY/dX$) et ajustement prédictif ($\widehat{Y}$). |
+| **3** | What statistical control means | Définition | Conditionner/stratifier pour maintenir la variable constante. |
+| **4** | Control quality dimensions | 2 Dimensions | Évaluer à la fois l'effet sur le Biais (exactitude) et la Précision (variance). |
+| **5** | Good control | Cause commune | $X \leftarrow Z \rightarrow Y$ : Ferme le chemin backdoor. **Ajuster obligatoirement.** |
+| **6** | Precision booster | Cause de $Y$ | $Z \rightarrow Y$ ($Z \perp\!\!\!\perp X$) : Réduit $\sigma^2$ sans affecter le biais. **Ajuster pour la précision.** |
+| **7** | Bad control 1 | Post-traitement | $X \rightarrow Z \rightarrow Y$ et $Z \leftarrow U \rightarrow Y$ : Bloque l'effet et ouvre un collisionneur. |
+| **8** | Blocking mediation | Médiateur | Conditionner sur $Z$ annule l'effet total transmis par le médiateur. |
+| **9** | Bad control 2 | Descendant de $Y$ | $X \rightarrow Y \rightarrow Z$ : Conditionner sur $Z$ réinjecte la fuite du résultat. |
+| **10** | Outcome descendants | Fuite | Invalide la comparaison en filtrant sur la réalisation du résultat. |
+| **11** | Bad control 3 | Parasite de précision | $Z \rightarrow X \rightarrow Y$ : Réduit $\mathrm{Var}(X \mid Z)$, gonfle l'écart-type $\mathrm{SE}(\widehat{\beta}_X)$. |
+| **12** | Exposure predictor | Inflation VIF | Prédire $X$ draine la variance utile de l'exposition sans réduire l'erreur sur $Y$. |
+| **13** | Bad control 4 | Amplificateur de biais | $Z \rightarrow X \leftarrow U \rightarrow Y$ : Purge la variation propre de $X$, concentre le biais de $U$. |
+| **14** | Residualization view | Théorème FWL | $X_{\perp Z} = \delta U + \varepsilon_X$ : L'estimateur OLS divise le biais par $(1 - R^2_{X \cdot Z})$. |
+| **15** | Pre-treatment timing | Sécurité temporelle | Être mesuré avant $X$ ne garantit rien (risque de M-bias, d'instruments, de parasites). |
+| **16** | Post-treatment warning | Confusion dynamique | En temporel lié ($X_1 \rightarrow L_2 \rightarrow X_2$), régression OLS échoue ; utiliser les G-méthodes. |
+| **17** | Randomization bounds | Invalidation RCT | Conditionner sur une variable post-randomisation réintroduit de la confusion. |
+| **18** | Table 2 fallacy | Interprétation | Un seul modèle OLS ne donne d'effet causal valide QUE pour l'exposition principale. |
+| **19** | Classification table | Taxonomie | Matrice de décision selon le rôle du contrôle dans le DAG. |
+| **20** | Simulation tool | Vérité terrain | La simulation Monte Carlo sur SCM est le seul moyen de vérifier l'absence de biais. |
+| **21** | Simulation template | Code R | Fonction template R pour benchmarker les ensembles d'ajustement. |
+| **22** | Selection distinction | Objectifs | LASSO/RF sélectionnent les collisionneurs et médiateurs car ils prédisent bien $Y$. |
+| **23** | Copernican principle | Philosophie | L'échantillon $N$ n'est qu'un tirage bruité du Data Generating Process (DGP). |
+| **24** | Overfitting vs Bias | Taxonomie Erreurs | Surajustement = erreur de variance ($N \rightarrow \infty$ annule). Biais = erreur de DAG (persiste). |
+| **25** | Polynomial demo | Démo R | Plus le degré augmente, plus le MSE in-sample chute mais le MSE out-of-sample explose. |
+| **26** | LOO-CV | Validation croisée | Mesure $\mathrm{elpd}_{\mathrm{LOO}}$ avec lissage PSIS et diagnostic de points influents ($k > 0.7$). |
+| **27** | Error dynamics | Courbe en U | Deviance in-sample chute toujours ; deviance out-of-sample forme une courbe en U. |
+| **28** | Regularization | Priors gaussiens | Resserre les coefficients vers 0 (shrinkage), réduit la variance, mais **ne fixe pas un mauvais DAG**. |
+| **29** | WAIC & PSIS | Critères d'info | Approximations bayésiennes du risque de surajustement ($p_{\mathrm{WAIC}}$). |
+| **30** | Predictive paradox | Inaptitude DAG | LOO/WAIC choisissent les modèles à biais de collisionneur car ils prédisent mieux $Y$. |
+| **31** | Risk-score CRM | Baseline vs Post | $R_0$ pré-campagne = Confoundeur (Ajuster). $R_1$ post-campagne = Collisionneur (Éviter). |
+| **32** | Email-open control | Campagne Email | Contrôler l'ouverture $O$ bloque l'effet du mail et biaise par l'affinité de marque ($U$). |
+| **33** | Eligibility collider | Sélection CRM | Règle $V \rightarrow E \leftarrow R$ : Filtrer sur $E=1$ induit une fausse corrélation négative entre $V$ et $R$. |
+| **34** | Channel preference | Parasite CRM | Préférer un canal $Z \rightarrow A$ gonfle le VIF sans éliminer de biais. |
+| **35** | Assignment rule | IV vs OLS | Règle d'assignation $Z$ amplifie le biais en OLS ; doit être utilisée en Variable Instrumentale (2SLS). |
+| **36** | CausalOps | Ops & Architecture | Définir les schémas de rôles, simuler les SCMs et maintenir 2 scoreboards séparés (Causal vs Prédictif). |
+| **37** | Common errors | Synthèse erreurs | 1. Tout inclure pré-traitement ; 2. Utiliser p-values/LASSO ; 3. Contrôler médiateurs ; 4. Utiliser CV pour le DAG ; 5. Compter sur la régularisation. |
+| **38** | Lecture takeaways | Conclusions | 1. Contrôles définis par le DAG ; 2. Évaluer biais ET précision ; 3. Scoreboards causal et prédictif séparés. |
+
 

@@ -975,7 +975,7 @@ Shares information across rare product subscriptions while tracking macro trends
 | Varying intercept | Group-specific latent parameter |
 | Population distribution | `HierarchyArtifact` |
 | Partial pooling | Adaptive regularization metadata |
-| Hyperpriors | Explicit population-scale prior |
+| Hyperprior | Explicit population-scale prior |
 | Exchangeability | Declared group-population assumption |
 | Observed-group prediction | Conditional prediction mode |
 | New-group prediction | Population predictive mode |
@@ -1974,7 +1974,7 @@ CausalOps should store:
 
 #### 29. How would you validate partial pooling by simulation?
 
-1. Define a true population distribution $\alpha_j^{\mathrm{true}} \sim \mathrm{Normal}(\bar{\alpha}_{\text{true}}, \sigma_{\text{true}})$.
+1. Define a true population distribution $\alpha_j^{\mathrm{true}} \sim \mathrm{Normal}(\bar{\alpha}_{\mathrm{true}}, \sigma_{\text{true}})$.
 2. Generate $J$ groups with varying sample sizes $N_j$, including very small $N_j$.
 3. Simulate outcomes $Y_{ij} \sim p(Y \mid \alpha_j^{\mathrm{true}})$.
 4. Fit complete-pooling, no-pooling, and partial-pooling models to the synthetic data.

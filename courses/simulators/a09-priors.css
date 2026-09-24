@@ -1,0 +1,25 @@
+.a09-simulator {border:1px solid #cbd5df;border-radius:12px;padding:20px;margin:20px 0 32px;background:#f6f8fb;color:#263445;font:15px/1.5 system-ui,sans-serif;}
+.a09-simulator .a09-intro strong {font-size:1.2rem;}
+.a09-simulator p {margin:8px 0 16px;}
+.a09-simulator .a09-controls {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px;margin:16px 0;}
+.a09-simulator label {display:block;font-weight:600;}
+.a09-simulator .a09-field {display:flex;gap:12px;align-items:center;margin-top:5px;}
+.a09-simulator input {width:100%;min-width:0;accent-color:#176caa;}
+.a09-simulator input[type=number] {padding:7px;border:1px solid #8799aa;border-radius:5px;background:white;color:#263445;}
+.a09-simulator output {min-width:3.2em;font-variant-numeric:tabular-nums;text-align:right;}
+.a09-simulator button {border:1px solid #176caa;border-radius:6px;background:white;color:#14588a;padding:8px 14px;margin:4px 8px 4px 0;cursor:pointer;font:inherit;}
+.a09-simulator button:hover {background:#e0eef8;}
+.a09-simulator :focus-visible {outline:3px solid #da8b14;outline-offset:3px;}
+.a09-simulator .a09-status {font-weight:600;min-height:2em;}
+.a09-simulator table {font-size:.85rem;width:100%;background:white;border-collapse:collapse;margin:12px 0;}
+.a09-simulator td,.a09-simulator th {padding:8px;border-bottom:1px solid #e0e6ec;text-align:right;}
+.a09-simulator th:first-child {text-align:left;}
+.a09-simulator caption {text-align:left;color:#263445;caption-side:top;font-weight:600;padding:5px 0;}
+.a09-simulator .a09-results,.a09-simulator .a09-data-table {overflow-x:auto;}
+.a09-simulator figure {background:white;border-radius:8px;padding:10px;margin:14px 0;}
+.a09-simulator figcaption {font-weight:600;color:#263445;margin:0 0 5px;}
+.a09-simulator canvas {display:block;width:100%;height:auto;}
+.a09-simulator details {padding:12px;background:#edf2f7;border-radius:6px;margin:12px 0;}
+.a09-simulator summary {cursor:pointer;font-weight:600;}
+@media(max-width:560px){.a09-simulator{padding:12px;}.a09-simulator .a09-controls{grid-template-columns:1fr;}}
+@media print{.a09-simulator input,.a09-simulator button{display:none;}}

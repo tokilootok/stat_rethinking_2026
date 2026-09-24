@@ -454,7 +454,7 @@ Consider $\eta_{ij} = \alpha_j + \beta_j x_{ij}$. If $x$ is shifted by constant 
 
 The new covariance is:
 
-$$ \mathrm{Cov}(\alpha^*, \beta) = \mathrm{Cov}(\alpha, \beta) + c \operatorname{Var}(\beta) $$
+$$ \mathrm{Cov}(\alpha^*, \beta) = \mathrm{Cov}(\alpha, \beta) + c \mathrm{Var}(\beta) $$
 
 Intercept-slope correlation depends directly on the location of $x = 0$.
 

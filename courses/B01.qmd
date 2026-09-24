@@ -62,10 +62,20 @@ This chapter uses the following notation. A symbol is restated locally whenever 
 - $\beta$: slope coefficient for a predictor variable;
 - $X_{ij}$ or $P_j$: individual-level or group-level covariate.
 
+### Distribution conventions and three scales
+
+Throughout this chapter, $\mathrm{Normal}(m,s)$ uses **standard deviation** $s$, not variance. $\mathrm{Exponential}(r)$ uses rate $r$, so its mean is $1/r$. The symbol $\mathcal D$ denotes the complete dataset; $D_j$ remains the number of tadpoles in tank $j$.
+
+Keep three quantities distinct: $\alpha_j$ is an intercept on the predictor scale; $p_j=\operatorname{logit}^{-1}(\alpha_j)$ is a probability; $S_j$ is an observed integer count. A **hyperparameter** specifies the distribution of group parameters, and a **hyperprior** is a prior on that hyperparameter. A **likelihood** evaluates how compatible the observed outcomes are with proposed parameter values.
+
 ### Acronyms and shorthand
 
 - **GLMM:** generalized linear multilevel model;
-- **HMC:** Hamiltonian Monte Carlo;
+- **MCMC:** Markov chain Monte Carlo, simulation used to approximate posterior distributions;
+- **HMC:** Hamiltonian Monte Carlo, an MCMC method using gradients;
+- **PPC:** posterior predictive check, comparison of observed summaries with the same summaries in replicated data simulated from posterior parameter draws;
+- **MCSE:** Monte Carlo standard error, simulation error in a posterior summary;
+- **SBC:** simulation-based calibration, repeated prior-generative simulations used to assess computational calibration;
 - **ESS:** effective sample size;
 - **PSIS-LOO / WAIC:** Pareto-smoothed importance sampling leave-one-out cross-validation / Widely Applicable Information Criterion;
 - **MSE:** mean squared error;
@@ -99,7 +109,7 @@ Instead:
 
 $$ \text{complete pooling} \longleftrightarrow \text{partial pooling} \longleftrightarrow \text{no pooling} $$
 
-The data learn where the model should lie between the two extremes.
+The data and hyperpriors jointly determine the amount of pooling; with few groups, the choice of hyperprior can remain influential.
 
 ---
 
@@ -130,6 +140,12 @@ $$ \text{B01 official Chapter 12} \approx \text{second-edition Chapter 13} $$
 This is a course reorganization or edition difference, not a statistical contradiction.
 
 ---
+
+### 2.2 Learning objectives and continuity with A01–A10
+
+After B01, you should be able to write a complete hierarchical model, explain where information is shared, distinguish uncertainty within and between groups, and predict for both observed and new groups. You should also be able to check whether the hierarchy fits the data and explain why pooling alone does not establish causality.
+
+A01 supplies the generative workflow; A07 motivates regularization; A08 supplies MCMC diagnostics; A09 connects likelihood, linear predictor, and link; A10 separates estimable contrasts from causal identification. B01 adds a learned distribution of group parameters to that workflow.
 
 ## 3. Why clustered data require memory
 
@@ -248,99 +264,128 @@ In Bayesian modeling, every unknown parameter has a posterior distribution.
 
 ---
 
-## 6. The multilevel generative model
+## 6. How the observation model, link, and hierarchy fit together
 
-A generic two-level Gaussian model is:
+### 6.1 Start with the observation and its support
 
-### Observation level
+The **support** is the set of possible outcomes. A tank with $D_j$ tadpoles can have $S_j\in\{0,\ldots,D_j\}$ survivors. A binomial likelihood respects this support. It also assumes conditionally independent survival trials with a common probability within the tank; sharing a tank effect does not justify all possible forms of biological dependence.
 
-$$ Y_{ij} \sim \mathrm{Normal} \left( \alpha_j, \sigma_Y \right) $$
+The complete predator model is:
 
-### Group level
+$$
+\begin{aligned}
+\bar\alpha&\sim\mathrm{Normal}(0,1.5), &\sigma_\alpha&\sim\mathrm{Exponential}(1),\\
+\beta_P&\sim\mathrm{Normal}(0,0.5), &z_j&\sim\mathrm{Normal}(0,1),\\
+\alpha_j&=\bar\alpha+\sigma_\alpha z_j, &\eta_j&=\alpha_j+\beta_P P_j,\\
+p_j&=\operatorname{logit}^{-1}(\eta_j)=\frac{1}{1+e^{-\eta_j}},
+&S_j&\sim\mathrm{Binomial}(D_j,p_j).
+\end{aligned}
+$$
 
-$$ \alpha_j \sim \mathrm{Normal} \left( \bar{\alpha}, \sigma_\alpha \right) $$
+Here $P_j=1$ means predator present and $P_j=0$ means absent. The hierarchy supplies each tank's intercept; the linear predictor adds its covariate contribution; the inverse link produces a valid probability; the likelihood generates a count.
 
-### Hyperpriors
+```mermaid
+flowchart TD
+  H["Hyperpriors: population mean and spread"] --> G["Group distribution: one intercept per tank"]
+  G --> L["Linear predictor: intercept + predator contribution"]
+  X["Predator indicator"] --> L
+  L --> P["Inverse logit: survival probability"]
+  P --> Y["Binomial distribution: survivor count"]
+  D["Initial number of tadpoles"] --> Y
+```
 
-$$ \bar{\alpha} \sim \mathrm{Normal} \left( m_\alpha, s_\alpha \right) $$
+The **link** maps probability to the linear predictor, $\operatorname{logit}(p_j)=\eta_j$. To generate predictions, use its inverse, $p_j=\operatorname{logit}^{-1}(\eta_j)$. Neither transformation creates the random observed count; the final binomial sampling step does that.
 
-$$ \sigma_\alpha \sim \mathrm{Exponential} \left( \lambda_\alpha \right) $$
+### 6.2 A numerical example
 
-The joint posterior is:
+Suppose one parameter draw gives $\bar\alpha=1$, $\sigma_\alpha=0.5$, $z_j=-1$, and $\beta_P=-1$. For a tank with predators and $D_j=10$:
 
-$$ p \left( \alpha_1,\ldots,\alpha_J, \bar{\alpha}, \sigma_\alpha, \sigma_Y \mid D \right) $$
+$$
+\alpha_j=1+0.5(-1)=0.5,\qquad
+\eta_j=0.5-1=-0.5,\qquad
+p_j\approx0.378.
+$$
 
-All levels are estimated simultaneously.
+The expected survivor count is $D_jp_j\approx3.78$; an actual count must be an integer from 0 to 10. Holding this tank effect fixed and removing predators gives $p_j\approx0.622$, a modeled probability contrast of about $-0.245$. This is a conditional contrast for these parameter values; a causal interpretation needs assumptions about predator assignment.
+
+### 6.3 The same construction with a Gaussian outcome
+
+For a continuous measurement, an illustrative complete hierarchy is:
+
+$$
+Y_{ij}\sim\mathrm{Normal}(\alpha_j,\sigma_Y),\quad
+\alpha_j\sim\mathrm{Normal}(\bar\alpha,\sigma_\alpha),
+$$
+
+$$
+\bar\alpha\sim\mathrm{Normal}(m_\alpha,s_\alpha),\quad
+\sigma_\alpha\sim\mathrm{Exponential}(r_\alpha),\quad
+\sigma_Y\sim\mathrm{Exponential}(r_Y).
+$$
+
+The constants $m_\alpha,s_\alpha,r_\alpha,r_Y$ must be chosen in the measurement's units. The identity link gives $\mu_{ij}=\alpha_j$: no nonlinear transformation is required. Here $\sigma_Y$ measures variation **within groups**, whereas $\sigma_\alpha$ measures variation **between group means**. They answer different questions.
+
+### 6.4 Why shared effects create dependence
+
+Assuming independent Gaussian observation errors, two different observations in the same group are independent conditional on $\alpha_j$. Integrating over the shared group effect gives, conditional on the hyperparameters,
+
+$$
+\operatorname{Cov}(Y_{ij},Y_{kj})=\sigma_\alpha^2,\qquad
+\operatorname{Corr}(Y_{ij},Y_{kj})=
+\frac{\sigma_\alpha^2}{\sigma_\alpha^2+\sigma_Y^2},\quad i\ne k.
+$$
+
+This correlation is the **intraclass correlation coefficient (ICC)** for this Gaussian model. A shared group effect explains a particular dependence structure; it does not automatically capture serial correlation or every within-group interaction.
 
 ---
 
-## 7. Adaptive priors
+## 7. Adaptive priors and joint learning
 
-For a no-pooling model, the prior on each group effect is fixed before fitting:
+In a no-pooling model, each group has a fixed prior, for example $\alpha_j\sim\mathrm{Normal}(0,1.5)$. In the hierarchy, the conditional prior is $\alpha_j\mid\bar\alpha,\sigma_\alpha\sim\mathrm{Normal}(\bar\alpha,\sigma_\alpha)$ and the hyperparameters are unknown.
 
-$$ \alpha_j \sim \mathrm{Normal}(0, 1.5) $$
+Writing $\mathcal D_j$ for group $j$'s observations, the joint posterior factorizes as
 
-In a multilevel model:
+$$
+p(\boldsymbol\alpha,\bar\alpha,\sigma_\alpha\mid\mathcal D)
+\propto p(\bar\alpha)p(\sigma_\alpha)
+\prod_{j=1}^J p(\alpha_j\mid\bar\alpha,\sigma_\alpha)
+p(\mathcal D_j\mid\alpha_j).
+$$
 
-$$ \alpha_j \sim \mathrm{Normal} \left( \bar{\alpha}, \sigma_\alpha \right) $$
+This expression suppresses any additional likelihood parameters for clarity. Conditional on the hyperparameters,
 
-The prior itself depends on unknown parameters learned from all groups.
+$$
+p(\alpha_j\mid\mathcal D,\bar\alpha,\sigma_\alpha)
+\propto p(\mathcal D_j\mid\alpha_j)
+p(\alpha_j\mid\bar\alpha,\sigma_\alpha).
+$$
 
-It is therefore an **adaptive prior**.
-
-The posterior for group $j$ is shaped by:
-
-$$ p(\alpha_j \mid D) \propto p(D_j \mid \alpha_j) p \left( \alpha_j \mid \bar{\alpha}, \sigma_\alpha \right) $$
-
-But $\bar{\alpha}$ and $\sigma_\alpha$ are themselves learned using all groups:
-
-$$ D_1,\ldots,D_J $$
-
-This is the mechanism by which the model remembers across groups.
+Full Bayesian inference then averages this conditional posterior over $p(\bar\alpha,\sigma_\alpha\mid\mathcal D)$. Information from other groups enters through that hyperparameter posterior. The phrase **adaptive prior** describes this shared learning; the joint prior specification is fixed before fitting, and observations are not counted twice.
 
 ---
 
-## 8. Partial pooling and shrinkage
+## 8. Partial pooling and shrinkage: an exact Gaussian example
 
-Partial pooling commonly moves group estimates toward the population mean.
+Suppose a group estimate satisfies $\widehat\alpha_j\mid\alpha_j\sim\mathrm{Normal}(\alpha_j,\sqrt{V_j})$ and $\alpha_j\mid\bar\alpha,\sigma_\alpha\sim\mathrm{Normal}(\bar\alpha,\sigma_\alpha)$. Conditional on known hyperparameters and sampling variance $V_j$, the posterior mean is exactly
 
-This is called **shrinkage**.
+$$
+\mathbb E[\alpha_j\mid\widehat\alpha_j,\bar\alpha,\sigma_\alpha]
+=w_j\widehat\alpha_j+(1-w_j)\bar\alpha,\qquad
+w_j=\frac{\sigma_\alpha^2}{\sigma_\alpha^2+V_j}.
+$$
 
-For an approximately Gaussian group estimate $\widehat{\alpha}_j$ with sampling variance $V_j$ and a population model $\alpha_j \sim \mathrm{Normal} \left( \bar{\alpha}, \sigma_\alpha^2 \right)$, the posterior mean has the schematic form:
+The posterior variance is $(1/V_j+1/\sigma_\alpha^2)^{-1}$. Here $w_j$ is the weight on the group's own estimate; $1-w_j$ is the amount of pooling toward the population center.
 
-$$ \mathbb{E} \left[ \alpha_j \mid D \right] \approx w_j \widehat{\alpha}_j + \left( 1-w_j \right) \bar{\alpha} $$
+For $\bar\alpha=0$, $\sigma_\alpha=1$, and two groups both having raw estimate 2:
 
-where:
+| Group information | Sampling variance $V_j$ | Own-data weight $w_j$ | Posterior mean |
+|---|---:|---:|---:|
+| Weak | 4 | 0.20 | 0.40 |
+| Strong | 0.25 | 0.80 | 1.60 |
 
-$$ w_j = \frac{ \sigma_\alpha^2 }{ \sigma_\alpha^2 + V_j } $$
+The noisier estimate moves farther toward zero. Greater population variation increases $w_j$; a more homogeneous population increases pooling. In a full hierarchy the hyperparameters are uncertain, so these conditional results must themselves be averaged over their posterior.
 
-This formula is exact in linear Gaussian conjugate settings, but captures the general logic for all GLMMs.
-
-### More data in group $j$
-
-When $V_j$ is small (large $N_j$):
-
-$$ w_j \rightarrow 1 $$
-
-The group estimate remains near its own data mean.
-
-### Less data in group $j$
-
-When $V_j$ is large (small $N_j$):
-
-$$ w_j \rightarrow 0 $$
-
-The estimate moves more strongly toward the population mean $\bar{\alpha}$.
-
-### More genuine group heterogeneity
-
-When $\sigma_\alpha$ is large, pooling weakens ($w_j \rightarrow 1$).
-
-### More homogeneous groups
-
-When $\sigma_\alpha$ is small, pooling strengthens ($w_j \rightarrow 0$).
-
-Shrinkage is therefore adaptive to both group sample size and estimated population variation.
+For logistic and other nonlinear models, this weighted-average formula is an intuition or local approximation, not a universal exact identity. Group size matters through information: in a binomial model, local information about a logit intercept is $D_jp_j(1-p_j)$, so sample size is not its only determinant.
 
 ---
 
@@ -348,7 +393,7 @@ Shrinkage is therefore adaptive to both group sample size and estimated populati
 
 Partial pooling deliberately introduces bias toward the population mean for individual groups.
 
-This reduces total expected error across all groups.
+Under a suitable population model, the variance reduction can outweigh the added bias and reduce average expected error. It is not guaranteed for every dataset or a misspecified hierarchy.
 
 The bias–variance trade-off is:
 
@@ -370,7 +415,7 @@ The official B01 script introduces a population of cafés.
 
 Each café has a latent waiting-time intensity.
 
-Visits produce observed waiting-time counts.
+The teaching example represents waiting time using nonnegative integer counts. Real continuous waiting times would require a suitable duration model; the Poisson example is a simplified illustration of shared learning.
 
 A simplified model is:
 
@@ -498,7 +543,7 @@ $$ \widehat{p}_j = \frac{S_j}{D_j} $$
 
 Small tanks can produce extreme proportions (0 or 1) from only a few outcomes.
 
-No pooling preserves these extremes too strongly.
+No pooling lacks adaptive sharing across tanks, so sparse-tank estimates may remain highly variable. A proper fixed prior can still regularize extreme proportions; no pooling does not mean no prior regularization.
 
 ---
 
@@ -524,9 +569,7 @@ The model does not shrink equally on the probability scale because the hierarchy
 
 The tanks have different initial counts ($D_j \in \{10, 20, 35\}$).
 
-A tank with $D_j=10$ contains less information about its survival probability than a tank with $D_j=35$.
-
-Therefore, smaller tanks are pooled more strongly toward the population average.
+At comparable survival probabilities, a tank with $D_j=10$ contains less information than a tank with $D_j=35$. Smaller tanks therefore tend to pool more strongly, but outcome extremity, predictors, and population-scale uncertainty also matter.
 
 This is visible in the difference between raw survival proportion and partially pooled posterior probability.
 
@@ -628,7 +671,7 @@ $$ \frac{1}{J} \sum_{j=1}^{J} E_j^{\mathrm{partial}} < \frac{1}{J} \sum_{j=1}^{J
 
 especially for small groups.
 
-Partial pooling is not guaranteed to improve every individual group estimate, but it guarantees lower average error over the population of groups.
+This inequality describes a simulation result under the chosen generative setting, not a universal guarantee. Repeat simulations over group sizes, population distributions, and hyperpriors; partial pooling can perform poorly when the shared population assumption is wrong.
 
 ---
 
@@ -658,7 +701,7 @@ The remaining $\alpha_j$ values represent residual tank heterogeneity after acco
 
 ## 23. Explained and residual group variation
 
-The posterior of $\sigma_\alpha$ shrinks after adding predictors.
+Adding useful group-level predictors can reduce the posterior residual scale $\sigma_\alpha$, but this is an empirical outcome to check, not a mathematical necessity.
 
 Without predators:
 
@@ -686,7 +729,7 @@ Mathematically, the prior is symmetric:
 
 $$ p \left( \alpha_1,\ldots,\alpha_J \mid \bar{\alpha}, \sigma_\alpha \right) = \prod_{j=1}^{J} p \left( \alpha_j \mid \bar{\alpha}, \sigma_\alpha \right) $$
 
-The labels can be permuted without changing the joint prior.
+The displayed conditionally independent, identically distributed normal model implies exchangeability. Exchangeability itself means permutation invariance and does not require marginal independence: integrating out shared hyperparameters makes group parameters dependent. With group predictors, exchangeability concerns the residual effects after accounting for those predictors.
 
 ### 24.1 When exchangeability is implausible
 
@@ -712,14 +755,21 @@ The normal population model may be wrong when group effects are multimodal, skew
 
 ## 26. Prior predictive checks for a hierarchy
 
-The official script examines priors on $\bar{\alpha}$ and $\sigma_\alpha$, then draws group effects $\alpha_j \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$.
+A **prior predictive check** simulates complete datasets before conditioning on observed outcomes. Draw hyperparameters, then group effects, then outcomes. For the intercept-only frog model:
 
-For a logistic model $p_j = \mathrm{logit}^{-1}(\alpha_j)$, prior predictive checks should inspect:
+```{r b01-prior-predictive}
+set.seed(2026)
+D_check <- rep(c(10L, 20L, 35L), each = 16)
+a_bar_check <- rnorm(1, 0, 1.5)
+sigma_check <- rexp(1, rate = 1)
+a_check <- rnorm(length(D_check), a_bar_check, sigma_check)
+p_check <- plogis(a_check)
+S_check <- rbinom(length(D_check), D_check, p_check)
+```
 
-- population-average survival;
-- spread of survival probabilities across tanks;
-- probability of near-zero or near-one groups;
-- replicated survival counts by tank size.
+Repeat this whole experiment to inspect the spread of group probabilities, the overall survival proportion, and the frequency of all-dead or all-surviving tanks at each size. Drawing a separate population mean for each tank would simulate a different hierarchy. When predictors are present, include their priors and the intended covariate design.
+
+A broad prior on the logit scale may produce many near-zero and near-one probabilities. Evaluate that implication scientifically rather than judging the prior from its coefficient width alone.
 
 ---
 
@@ -748,7 +798,7 @@ When data per group are weak and $\sigma_\alpha$ can approach zero, the posterio
 - group effects must contract tightly around $\bar{\alpha}$ when $\sigma_\alpha \rightarrow 0$;
 - they can spread widely when $\sigma_\alpha$ is large.
 
-This creates sharp curvature that produces MCMC divergences, high autocorrelation, and low ESS.
+This can create curvature that is difficult for numerical integration, leading to divergent transitions or low effective sample size. Diagnose the fitted model rather than assuming failure from its parameterization alone.
 
 ---
 
@@ -764,7 +814,7 @@ The scientific model is unchanged.
 
 The sampled geometry changes: the standardized offsets $z_j$ are independent of $\sigma_\alpha$ in the prior.
 
-This eliminates the funnel geometry and resolves MCMC divergences for sparse group data.
+This removes the prior scale coupling and often improves sampling for weakly informed groups. The likelihood can still induce difficult posterior dependence; non-centering does not guarantee zero divergences or efficient sampling.
 
 ---
 
@@ -774,7 +824,7 @@ Both parameterizations imply identical prior probability distributions for $\alp
 
 Therefore, when MCMC samples correctly from both, the target posterior distributions are identical.
 
-The choice is strictly computational: non-centered parameterization excels when data per group are sparse, while centered parameterization can be more efficient when data per group are dense.
+With identical priors and likelihoods, the choice is computational: weakly informed group effects often favor non-centering, whereas strongly informed effects may favor centering. Compare diagnostics and ESS per second for the same scientific quantities.
 
 ---
 
@@ -809,6 +859,26 @@ $$ \alpha^{\mathrm{person}}_u \sim \mathrm{Normal}(0, \sigma_U), \quad \sigma_U 
 
 ---
 
+### 32.1 How ordered categories arise
+
+An ordered outcome is neither a continuous Gaussian value nor a collection of equally spaced numeric measurements. For $K$ categories and increasing cutpoints $c_1<\cdots<c_{K-1}$,
+
+$$
+\Pr(R_i\le k\mid\phi_i,\mathbf c)
+=\operatorname{logit}^{-1}(c_k-\phi_i).
+$$
+
+Set $c_0=-\infty$ and $c_K=+\infty$. Category probabilities are differences of adjacent cumulative probabilities:
+
+$$
+\Pr(R_i=k)=\operatorname{logit}^{-1}(c_k-\phi_i)
+-\operatorname{logit}^{-1}(c_{k-1}-\phi_i).
+$$
+
+The story and person intercepts both enter $\phi_i$; larger $\phi_i$ shifts mass toward higher response categories. Cutpoints determine the category boundaries. Zero-centered effect distributions and omission of a redundant global intercept anchor the location relative to the cutpoints.
+
+The code in section 51.4 is a reduced teaching model. The official script also contains participant predictors, gender-specific coefficients, and an education effect.
+
 ## 33. What the two trolley hierarchies mean
 
 - $\sigma_S$ measures residual variation among stories after accounting for experimental factors.
@@ -828,7 +898,7 @@ This creates:
 - overconfident treatment effect estimates;
 - incorrect weighting of highly observed participants.
 
-Including a participant varying intercept absorbs stable individual propensities and corrects pseudoreplication.
+A participant varying intercept models stable individual propensities and the associated dependence. Serial dependence, varying responses to treatment, or other residual structure may require additional terms. More responses improve knowledge of a participant, but do not create more independent participants.
 
 ---
 
@@ -848,7 +918,7 @@ Empirical Bayes plugs in point estimates $(\widehat{\bar{\alpha}}, \widehat{\sig
 
 Full Bayes retains hyperparameter uncertainty $p(\bar{\alpha}, \sigma_\alpha \mid D)$ and propagates it into posterior predictions.
 
-Plugging in point estimates underestimates uncertainty when $J$ is small.
+A naive plug-in analysis omits hyperparameter uncertainty and can understate uncertainty, especially with few groups; some empirical-Bayes procedures add corrections for that uncertainty.
 
 ---
 
@@ -870,7 +940,7 @@ For a new, unobserved group:
 2. Draw a new group intercept: $\alpha_{\mathrm{new}}^{(s)} \sim \mathrm{Normal}\left(\bar{\alpha}^{(s)}, \sigma_\alpha^{(s)}\right)$;
 3. Simulate outcomes: $S_{\mathrm{new}}^{(s)} \sim \mathrm{Binomial}\left(D_{\mathrm{new}}, \mathrm{logit}^{-1}\left(\alpha_{\mathrm{new}}^{(s)}\right)\right)$.
 
-New-group uncertainty is substantially wider because it incorporates population heterogeneity $\sigma_\alpha$.
+New-group prediction includes uncertainty about an unobserved group effect. It is often wider than prediction for a well-observed group, but interval widths also depend on the outcome scale, design, and fitted probabilities; no strict ordering holds in every case.
 
 ---
 
@@ -880,11 +950,18 @@ Setting $\alpha_j = \bar{\alpha}$ describes a hypothetical average group on the 
 
 It is NOT a prediction for a randomly selected new group.
 
-For non-linear link functions (e.g., logit, log):
+For nonlinear inverse links, transforming the population center generally differs from averaging transformed group effects:
 
 $$ \mathrm{logit}^{-1}(\bar{\alpha}) \neq \mathbb{E}_{\alpha_{\mathrm{new}}} \left[ \mathrm{logit}^{-1}(\alpha_{\mathrm{new}}) \right] $$
 
-New-group prediction must integrate over the draw $\alpha_{\mathrm{new}} \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$.
+The displayed inequality is generic, not universal: for a symmetric normal logit distribution centered at zero, both sides equal 0.5. With a log link the distinction is explicit:
+
+$$
+\mathbb E[e^{\alpha_{\mathrm{new}}}\mid\bar\alpha,\sigma_\alpha]
+=e^{\bar\alpha+\sigma_\alpha^2/2},
+$$
+
+whereas the central group's expected count is $e^{\bar\alpha}$. New-group prediction integrates over the group distribution and over posterior hyperparameter uncertainty.
 
 ---
 
@@ -895,31 +972,38 @@ In non-linear GLMMs:
 - **Cluster-specific effect:** $\Delta_j = \mathrm{logit}^{-1}(\alpha_j + \beta) - \mathrm{logit}^{-1}(\alpha_j)$
 - **Population-average effect:** $\Delta_{\mathrm{pop}} = \mathbb{E}_{\alpha} \left[ \mathrm{logit}^{-1}(\alpha + \beta) - \mathrm{logit}^{-1}(\alpha) \right]$
 
-Because of Jensen's inequality and link-function non-linearity, these two quantities differ.
+These quantities can differ because the probability change varies with the baseline intercept. The inverse logit is not globally convex or concave, so Jensen’s inequality does not provide a universal direction of difference. Also specify whether the target averages equally over groups or over individuals: large groups receive more weight in the latter.
 
 ---
 
 ## 41. Multilevel models and causality
 
-Varying intercepts absorb group heterogeneity, but do not resolve group-level treatment confounding if treatment exposure $X_{ij}$ correlates with unobserved group traits.
+A varying intercept models persistent group differences. It does not establish that treatment assignment is independent of unobserved causes of the outcome. A causal interpretation still requires a defensible assignment mechanism or adjustment set, consistency, positivity, and appropriate handling of selection and interference.
 
-Causal identification requires explicitly modeling between-group and within-group covariate relationships (e.g., Mundlak centering).
+For example, if a campaign targets stores with high latent demand, a store intercept alone does not prove that the campaign coefficient isolates a causal effect. Distinguish modeling the dependence of observations from identifying the intervention contrast.
 
 ---
 
-## 42. Varying effects are not fixed effects
+## 42. Within-group and between-group relationships
 
-Econometric fixed-effects models eliminate between-group variation to avoid omitted variable bias at the group level.
+A useful decomposition, often called a **Mundlak** or within–between specification, is
 
-Standard multilevel models assume group intercepts are independent of treatment.
+$$
+\eta_{ij}=\alpha_j+\beta_W(X_{ij}-\bar X_j)+\beta_B\bar X_j,
+\qquad \alpha_j\sim\mathrm{Normal}(\bar\alpha,\sigma_\alpha),
+$$
 
-When group intercepts correlate with treatment, standard varying-intercept estimates of $\beta$ can be biased unless Mundlak terms ($\bar{X}_j$) are added.
+where $\bar X_j$ is group $j$'s covariate mean. Here $\beta_W$ describes within-group variation and $\beta_B$ describes differences in group means. This relaxes the assumption that one coefficient captures both relationships and models one source of correlation between group characteristics and covariates.
+
+In an additive linear model, unrestricted unit indicators remove stable additive unit differences when estimating a within-unit slope. They do not remove time-varying confounding, and a predictor constant within each unit cannot have its effect separately estimated from those indicators. Nonlinear fixed-effects models bring additional estimation issues.
+
+Neither fixed effects nor Mundlak terms automatically establish causality. The identifying variation, omitted variables, and treatment assignment still require examination.
 
 ---
 
 ## 43. Exchangeability and causal transport
 
-Generalizing predictions to new clusters assumes the target cluster population matches the estimated hyperdistribution $p(\bar{\alpha}, \sigma_\alpha)$.
+Generalizing predictions to new clusters assumes the target cluster population is adequately represented by the fitted group distribution $p(\alpha_{\mathrm{new}}\mid\bar{\alpha},\sigma_\alpha)$, averaged over posterior hyperparameter uncertainty.
 
 Transporting estimates to new domains requires including key domain-level predictors in the hyperdistribution.
 
@@ -943,7 +1027,7 @@ When testing $K$ marketing campaigns:
 
 $$ \beta_k \sim \mathrm{Normal}(\bar{\beta}, \sigma_\beta) $$
 
-Sparse campaigns with few impressions are shrunken toward the population campaign effect $\bar{\beta}$, preventing false positives from noisy small campaigns.
+Sparse campaigns with few impressions are shrunken toward the population campaign effect $\bar{\beta}$, reducing exaggerated estimates from noisy small campaigns when the shared-effect model is appropriate. This does not guarantee a false-positive rate or replace a decision rule.
 
 ---
 
@@ -953,7 +1037,7 @@ Cross-classified hierarchy for retail transactions:
 
 $$ \log(\lambda_i) = \mu + \alpha^{\mathrm{customer}}_{C_i} + \alpha^{\mathrm{store}}_{S_i} + X_i^{\mathsf T}\beta $$
 
-Separates customer purchasing power from store-level performance.
+Separates persistent customer and store associations under the additive model. These terms are not automatically causal measures of purchasing power or performance. Include an exposure offset when observation windows or purchase opportunities differ.
 
 ---
 
@@ -963,7 +1047,7 @@ Multi-way cross-classification for customer churn:
 
 $$ \mathrm{logit}(p_{ipt}) = \alpha^{\mathrm{customer}}_i + \alpha^{\mathrm{product}}_p + \alpha^{\mathrm{month}}_t $$
 
-Shares information across rare product subscriptions while tracking macro trends and customer propensities.
+Shares information across product subscriptions and represents customer and month differences. Independent month effects do not impose a temporal trend; use a time-structured model when temporal dependence matters. Define who is at risk and the churn observation window.
 
 ---
 
@@ -975,7 +1059,7 @@ Shares information across rare product subscriptions while tracking macro trends
 | Varying intercept | Group-specific latent parameter |
 | Population distribution | `HierarchyArtifact` |
 | Partial pooling | Adaptive regularization metadata |
-| Hyperprior | Explicit population-scale prior |
+| Hyperpriors | Explicit population-scale prior |
 | Exchangeability | Declared group-population assumption |
 | Observed-group prediction | Conditional prediction mode |
 | New-group prediction | Population predictive mode |
@@ -993,7 +1077,7 @@ Simulation validation workflow:
 3. Simulate outcomes $Y_{ij} \sim p(Y \mid \alpha_j^{\mathrm{true}})$;
 4. Fit complete-pooling, no-pooling, and partial-pooling models;
 5. Compute RMSE: $\sqrt{\frac{1}{J}\sum (\widehat{\alpha}_j - \alpha_j^{\mathrm{true}})^2}$;
-6. Verify that partial pooling achieves minimal total RMSE.
+6. Repeat over many simulated datasets and compare RMSE, interval coverage, and predictive calibration for observed and new groups. Include misspecified populations and unequal group sizes; record when pooling helps or fails instead of requiring it to win.
 
 ---
 
@@ -1010,13 +1094,15 @@ Simulation validation workflow:
 9. **Zeroing out new-group effects:** Setting $\alpha_{\text{new}} = \bar{\alpha}$ instead of drawing from the hyperdistribution.
 10. **Expecting sample means from sparse groups:** Expecting shrunken estimates to equal sample averages.
 11. **Parameter count confusion:** Equating number of nominal parameters with degrees of freedom.
-12. **Ignoring MCMC funnel divergences:** Sampling centered hierarchies with sparse data without non-centering.
+12. **Ignoring MCMC diagnostics:** Assuming either centering or non-centering guarantees reliable sampling.
 13. **Confounding varying intercepts with causal identification:** Expecting varying intercepts to fix treatment selection bias.
 14. **Conflating observed and new group prediction:** Using conditional predictions for unobserved groups.
 
 ---
 
 ## 51. Code Demonstrations & Multi-Framework Implementation
+
+Examples below are teaching implementations, not stored fit results. Run them from the repository root. Cross-language comparisons require identical observations, priors, likelihoods, and estimands. The R data-preparation steps export CSVs for Python; matching a seed across languages does not guarantee matching data.
 
 ### 51.1 Café Golem (R rethinking/ulam, Stan, PyMC)
 
@@ -1031,7 +1117,11 @@ n_cafes <- 5
 w_true <- c(3, 15, 3, 1, 3)
 n_visits <- 20
 cafe_id <- c(rep(1, 1), rep(2, 1), 1, rep(c(1, 3, 4, 5), times = 4), 2)
-y_obs <- rpois(n_visits, w_true[cafe_id]) + 1
+y_obs <- rpois(n_visits, w_true[cafe_id])
+# Generate unshifted Poisson data consistent with this demonstration's likelihood.
+dir.create("artifacts/B01", recursive = TRUE, showWarnings = FALSE)
+write.csv(data.frame(cafe_id = cafe_id, y = y_obs),
+          "artifacts/B01/cafe.csv", row.names = FALSE)
 
 dat_cafe <- list(
   N = n_visits,
@@ -1100,11 +1190,14 @@ import pymc as pm
 import numpy as np
 import arviz as az
 
-# Data setup
-n_cafes = 5
-n_visits = 20
-cafe_id = np.array([0, 1, 0, 0, 2, 3, 4, 0, 2, 3, 4, 0, 2, 3, 4, 0, 2, 3, 4, 1])
-y_obs = np.array([4, 18, 5, 3, 2, 4, 4, 3, 2, 3, 3, 4, 2, 4, 3, 4, 3, 4, 4, 15])
+# Run the R preparation above first; preserve row order and convert indices.
+import pandas as pd
+cafe_data = pd.read_csv("artifacts/B01/cafe.csv")
+cafe_id = cafe_data["cafe_id"].to_numpy(dtype=int) - 1
+n_cafes = int(cafe_id.max()) + 1
+n_visits = len(cafe_data)
+y_obs = cafe_data["y"].to_numpy(dtype=int)
+assert cafe_id.min() == 0 and (y_obs >= 0).all()
 
 with pm.Model() as cafe_model:
     # Hyperpriors
@@ -1126,6 +1219,8 @@ print(az.summary(idata_cafe, var_names=["a_bar", "sigma", "a"]))
 
 ---
 
+The official café animation later shifts simulated counts by one and overrides one observation. This demonstration uses unshifted Poisson draws so its simulation and likelihood agree; it does not reproduce those animation values.
+
 ### 51.2 Reed-Frog Multilevel Model (R ulam, Stan, PyMC)
 
 #### R rethinking / ulam
@@ -1142,6 +1237,13 @@ dat_frog <- list(
   T = d$tank,
   P = ifelse(d$pred == "pred", 1L, 0L)
 )
+
+# Export the installed dataset once; Python reads these exact observations.
+dir.create("artifacts/B01", recursive = TRUE, showWarnings = FALSE)
+write.csv(data.frame(tank = dat_frog$T, density = dat_frog$D,
+                     surv = dat_frog$S, pred = dat_frog$P),
+          "artifacts/B01/reedfrogs.csv", row.names = FALSE)
+stopifnot(all(dat_frog$S >= 0), all(dat_frog$S <= dat_frog$D))
 
 # Multilevel varying intercept model
 m_frog_ulam <- ulam(
@@ -1221,14 +1323,11 @@ import pymc as pm
 import pandas as pd
 import numpy as np
 
-# Load reedfrogs data equivalent
-df_frogs = pd.DataFrame({
-    'density': [10]*16 + [20]*16 + [35]*16,
-    'surv': [9, 10, 7, 10, 9, 9, 10, 9, 4, 9, 7, 6, 7, 5, 9, 9,
-             19, 14, 18, 19, 17, 18, 19, 16, 11, 17, 14, 13, 8, 8, 14, 13,
-             32, 33, 31, 33, 32, 34, 33, 32, 13, 23, 27, 24, 20, 20, 22, 23],
-    'pred': [0]*8 + [1]*8 + [0]*8 + [1]*8 + [0]*8 + [1]*8
-})
+# Run the R export above first; do not substitute hand-entered outcomes.
+df_frogs = pd.read_csv("artifacts/B01/reedfrogs.csv")
+assert len(df_frogs) == 48
+assert ((df_frogs["surv"] >= 0) &
+        (df_frogs["surv"] <= df_frogs["density"])).all()
 
 n_tanks = len(df_frogs)
 tank_id = np.arange(n_tanks)
@@ -1250,53 +1349,51 @@ with pm.Model() as frog_model:
 
 ---
 
+For the general rationale, see [Stan’s guide to reparameterization](https://mc-stan.org/docs/2_28/stan-users-guide/reparameterization.html).
+
 ### 51.3 Centered vs Non-Centered Funnel Demonstration
 
 ```{r funnel-demo}
 library(rethinking)
-
-# Centered hierarchy simulation
 set.seed(42)
-J <- 50
-dat_funnel <- list(
-  J = J,
-  y = rnorm(J, 0, 0.1),
-  N = rep(2, J)
-)
+J <- 50L
+# One group mean based on two noisy observations in each group.
+a_true <- rnorm(J, 0, 0.1)
+se <- rep(1 / sqrt(2), J)
+dat_funnel <- list(y = rnorm(J, a_true, se), se = se, group = seq_len(J))
 
-# Centered parameterization (prone to divergences when data are sparse)
 m_centered <- ulam(
   alist(
-    y ~ dnorm(a, 1),
-    a[J] ~ dnorm(a_bar, sigma),
+    y ~ dnorm(mu, se),
+    mu <- a[group],
+    a[group] ~ dnorm(a_bar, sigma),
     a_bar ~ dnorm(0, 1),
     sigma ~ dexp(1)
-  ),
-  data = dat_funnel,
-  chains = 4,
-  cores = 4,
+  ), data = dat_funnel, chains = 4, cores = 4,
   control = list(adapt_delta = 0.8)
 )
-
-# Non-centered parameterization (stable sampler geometry)
 m_noncentered <- ulam(
   alist(
-    y ~ dnorm(a, 1),
-    a[J] <- a_bar + z[J] * sigma,
-    z[J] ~ dnorm(0, 1),
+    y ~ dnorm(mu, se),
+    mu <- a_bar + z[group] * sigma,
+    z[group] ~ dnorm(0, 1),
     a_bar ~ dnorm(0, 1),
     sigma ~ dexp(1)
-  ),
-  data = dat_funnel,
-  chains = 4,
-  cores = 4,
+  ), data = dat_funnel, chains = 4, cores = 4,
   control = list(adapt_delta = 0.8)
 )
-
-# Inspect divergence comparison
-cat("Centered divergences:", sum(get_divergent_iterations(m_centered@stanfit)), "\n")
-cat("Non-centered divergences:", sum(get_divergent_iterations(m_noncentered@stanfit)), "\n")
+# RStan backend: compare divergences and the same hyperparameters.
+count_divergences <- function(fit) {
+  pars <- rstan::get_sampler_params(fit@stanfit, inc_warmup = FALSE)
+  sum(vapply(pars, function(x) sum(x[, "divergent__"]), numeric(1)))
+}
+c(centered = count_divergences(m_centered),
+  noncentered = count_divergences(m_noncentered))
+precis(m_centered, pars = c("a_bar", "sigma"))
+precis(m_noncentered, pars = c("a_bar", "sigma"))
 ```
+
+The models use the same data and priors. This experiment may reveal a sampling advantage, but a particular number of divergences or a universal non-centering advantage is not guaranteed.
 
 ---
 
@@ -1312,8 +1409,8 @@ dat_trolley <- list(
   A = d$action,
   I = d$intention,
   C = d$contact,
-  S = as.integer(d$story),
-  U = as.integer(d$id)
+  S = as.integer(factor(d$story)),
+  U = as.integer(factor(d$id))
 )
 
 # Non-centered cross-classified model
@@ -1362,7 +1459,9 @@ cat("New tank 89% PI survival count:", HPDI(surv_sim_new, prob = 0.89), "\n")
 
 ---
 
-## 52. Homework Exercises and Complete Solutions
+## 52. Supplementary practice exercises and worked model specifications
+
+The exercise labels below organize the existing frog and Bangladesh practice material. They are not the official 2026 B01 homework, which uses `BMJSubmissions.csv` and is covered in section 59. Code specifies analyses to run; numerical posterior conclusions must come from validated fits, not from the expected behavior of a model.
 
 ### Exercise 13M1
 
@@ -1458,7 +1557,7 @@ precis(m_STP, pars = "sigma")
 precis(m_13m2, pars = "sigma")
 ```
 
-**Interpretation:** Density is already accounted for in the binomial likelihood through trial count $D_j$. Adding density as a linear predictor in log-odds tests whether per-tadpole survival probability varies systematically with tank density. If $\sigma_\alpha$ changes little, initial density has minor additional log-odds effects beyond specifying the denominator.
+**Interpretation:** Density is already accounted for in the binomial likelihood through trial count $D_j$. Adding density as a linear predictor in log-odds tests whether per-tadpole survival probability varies systematically with tank density. Inspect the posterior of the density coefficient and probability contrasts directly. A small change in residual scale alone does not establish a negligible density effect.
 
 ---
 
@@ -1511,7 +1610,7 @@ m_cauchy <- ulam(
 plot(coeftab(m_exp, m_cauchy), pars = "sigma")
 ```
 
-**Analytical explanation:** With 48 tanks, there is abundant data to estimate $\sigma_\alpha$. Consequently, the posterior of $\sigma_\alpha$ is dominated by the likelihood and changes very little between Exponential(1) and Half-Cauchy(0,1) priors. Half-Cauchy has a heavier tail, allowing very large $\sigma_\alpha$ when data are sparse, whereas Exponential concentrates more mass near zero.
+**Interpretation to check:** The half-Cauchy has a much heavier upper tail. Compare posterior scale summaries, group predictions, and sampling diagnostics before concluding that the priors agree. Forty-eight groups do not by themselves guarantee negligible prior sensitivity. The scale must be constrained positive for the Cauchy prior to represent a half-Cauchy.
 
 ---
 
@@ -1634,8 +1733,9 @@ import numpy as np
 
 # PyMC Multilevel Bangladesh Model
 # assuming df_bangladesh loaded with columns 'use' and 'district_id'
-n_districts = df_bangladesh['district_id'].nunique()
-district_idx = df_bangladesh['district_id'].values
+district_idx, district_levels = pd.factorize(df_bangladesh["district_id"], sort=True)
+n_districts = len(district_levels)
+assert (district_idx >= 0).all()  # no missing IDs; Python indices start at zero
 
 with pm.Model() as bangladesh_pymc:
     a_bar = pm.Normal("a_bar", mu=0, sigma=1.5)
@@ -1690,7 +1790,26 @@ m_13h2 <- ulam(
 )
 
 precis(m_13h2)
+
+# Alternative: the urban association also varies across districts.
+m_13h2_varying <- ulam(
+  alist(
+    use ~ dbinom(1, p),
+    logit(p) <- a_bar + z[district] * sigma +
+                (bU + zU[district] * sigma_U) * urban + bA * age,
+    z[district] ~ dnorm(0, 1),
+    zU[district] ~ dnorm(0, 1),
+    a_bar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1),
+    bU ~ dnorm(0, 0.5),
+    sigma_U ~ dexp(2),
+    bA ~ dnorm(0, 0.5)
+  ), data = dat_13h2, chains = 4, cores = 4
+)
+precis(m_13h2_varying, pars = c("bU", "sigma_U", "bA"))
 ```
+
+This extension assumes independent intercept and urban-slope offsets; a correlated hierarchy is a further model choice. Inspect district-specific probability contrasts and predictive performance using a holdout design matched to the intended prediction. A positive continuous scale prior does not make $\Pr(\sigma_U>0)$ a useful test of varying slopes.
 
 ---
 
@@ -1780,7 +1899,7 @@ Focus on:
 - A04 categorical index models;
 - A07 regularization and overfitting;
 - A08 HMC diagnostics;
-- A09 binomial and ordered-logistic likelihoods;
+- A09 binomial likelihoods and inverse links; the ordinal extension is explained in section 32 here;
 - the distinction between parameter uncertainty and predictive uncertainty.
 
 ---
@@ -1805,7 +1924,7 @@ Displays raw survival proportions, fits a multilevel binomial model, compares le
 
 #### Full trolley model
 
-Fits an ordered-logistic model with experimental predictors, varying story intercepts, and varying participant intercepts in centered and non-centered parameterizations.
+Fits an ordered-logistic model with experimental and participant predictors and crossed story/person effects. In the local script, the displayed centered and non-centered fits also change scale priors from exponential to half-normal; they are therefore not a pure parameterization comparison. Keep the priors identical when testing computational efficiency.
 
 ---
 
@@ -1817,170 +1936,295 @@ Fits an ordered-logistic model with experimental predictors, varying story inter
 
 ---
 
+## 58. A validation workflow for multilevel models
+
+### 58.1 Check data and computation separately
+
+Before fitting, verify group IDs, trial counts, and observation units. R/Stan indices start at one; Python array indices start at zero. Check $0\le S_j\le D_j$, use the same mapping in every implementation, and distinguish a missing group from an observed group with zero successes.
+
+Use multiple chains and examine rank-normalized split $\widehat R$, bulk and tail ESS, MCSE for important summaries, divergent transitions, and tree-depth warnings. A value of $\widehat R$ close to one is a screening diagnostic, not proof that every posterior region has been explored. Compare centered and non-centered implementations with identical likelihoods and priors before interpreting a difference as computational.
+
+Code chunks in this chapter are disabled during rendering (`eval: false`). Reading or rendering the document does not fit the models. Statements about the fitted data must be supported by a separately executed and checked analysis.
+
+### 58.2 Posterior predictive checks at two levels
+
+A **posterior predictive check (PPC)** compares observations with replicated data generated using posterior parameter draws. A tank's posterior mean probability alone is not a replicated count.
+
+For the existing tanks, keep their fitted effects and original sizes. For each posterior draw $s$:
+
+$$
+S_j^{\mathrm{rep},(s)}\sim\mathrm{Binomial}
+\left(D_j,\operatorname{logit}^{-1}(\alpha_j^{(s)})\right).
+$$
+
+Compare tank counts, proportions by tank size, the number of all-dead or all-surviving tanks, and patterns by predator status. Include the predator coefficient if checking the predator model.
+
+To challenge the population hierarchy, draw fresh tank effects from the posterior hyperparameters before generating counts. This **mixed replication** checks whether a new collection of tanks resembles the observed collection; conditional checks can hide a poor population model when fitted tank intercepts absorb most differences.
+
+```{r b01-posterior-checks}
+# Intercept-only model from section 51.2; rows are draws, columns are tanks.
+post <- extract.samples(m_frog_ulam)
+M <- nrow(post$a)
+J_check <- length(dat_frog$D)
+stopifnot(ncol(post$a) == J_check)
+set.seed(2026)
+rep_existing <- rep_population <- matrix(NA_integer_, M, J_check)
+for (s in seq_len(M)) {
+  rep_existing[s, ] <- rbinom(J_check, dat_frog$D, plogis(post$a[s, ]))
+  a_fresh <- rnorm(J_check, post$a_bar[s], post$sigma[s])
+  rep_population[s, ] <- rbinom(J_check, dat_frog$D, plogis(a_fresh))
+}
+# Compare the observed total with both replicated distributions.
+c(observed = sum(dat_frog$S),
+  conditional_median = median(rowSums(rep_existing)),
+  population_median = median(rowSums(rep_population)))
+```
+
+The same new group effect must be reused for all observations belonging to one new group within a draw. Drawing an independent effect for each visit would erase the modeled within-group dependence. See [Stan's guide to predictive checks](https://mc-stan.org/docs/stan-users-guide/posterior-predictive-checks.html) for hierarchical replication.
+
+### 58.3 Match validation to the prediction target
+
+| Target | Suitable holdout | Group effect used for prediction |
+|---|---|---|
+| Another response from a known person | Hold out responses, retain that person's other data | Posterior effect informed by retained data |
+| Responses from a new person | Hold out all responses from that person | Fresh effect drawn from the population hierarchy |
+| A new story for known participants | Hold out the story across participants | New story effect, retained participant effects |
+| A new person and a new story | Hold out the relevant units on both dimensions | Fresh effects for both dimensions |
+
+An aggregated tank likelihood has one contribution per tank. Leaving out that contribution removes the tank's outcome information; it is not equivalent to leaving out one tadpole while retaining the rest. PSIS-LOO approximations can struggle when the full-data fit has strongly learned the held-out group's effect. Inspect Pareto-$k$ diagnostics and use explicit group refits or suitable integrated predictions when necessary.
+
+### 58.4 Recovery, calibration, and sensitivity
+
+**Parameter recovery** compares estimates from simulated data with their known generating values. Repeat it across many datasets to measure error and interval coverage; a successful single fit does not prove identifiability. Compare performance for group probabilities, population scales, and scientific contrasts, not only intercepts.
+
+**Simulation-based calibration (SBC)** draws parameters from the joint prior, simulates data, refits, and checks ranks of generating quantities among effectively independent posterior draws. It tests computational calibration averaged over the chosen prior-generative scenarios, not scientific validity for the real population.
+
+Vary plausible scale priors, the group-effect distribution, group predictors, and influential groups. Few groups, informative group sizes, or an omitted subgroup can change pooling materially. A model should not be accepted merely because partial pooling wins one simulation or two software implementations agree.
+
+---
+
+## 59. Official B01 homework: weekend submissions to the BMJ
+
+### 59.1 Data and scientific question
+
+The official [homework](../homework/homework_B01.pdf) asks for country-specific probabilities that a submitted article arrives on a weekend, using first no pooling and then partial pooling. The local file `homework/BMJSubmissions.csv` contains 49,464 submissions from 38 countries, with local submission time `T`, year `Y`, country name, country ID `L`, weekend indicator `W`, and holiday indicator `H`.
+
+The estimand is $\Pr(W=1\mid\text{submission},\text{country}=j)$ for submissions represented by this dataset. It is not the probability that an arbitrary researcher works on a weekend, and it is not a causal country effect. The event definition comes from `W`; do not substitute a calendar baseline without checking how weekends are coded.
+
+### 59.2 Aggregate only under the intended model
+
+If submissions are conditionally independent and share one weekend probability within country, aggregate them into $K_j$ weekend submissions among $N_j$ submissions:
+
+$$
+K_j\sim\mathrm{Binomial}(N_j,p_j).
+$$
+
+This gives the same parameter likelihood as individual Bernoulli observations up to a parameter-independent combinatorial factor. It discards information needed for year, local-time, author-level, or other covariate models. No author identifier is provided here, so dependence from repeated submissions by the same author cannot be directly modeled with these columns.
+
+```{r b01-bmj-prepare}
+# Run from the repository root.
+bmj <- read.csv("homework/BMJSubmissions.csv")
+stopifnot(nrow(bmj) == 49464L, all(bmj$W %in% 0:1),
+          length(unique(bmj$L)) == 38L)
+key <- unique(bmj[c("L", "country_name")])
+key <- key[order(key$L), ]
+stopifnot(nrow(key) == 38L, !anyDuplicated(key$L))
+N_country <- vapply(key$L, function(j) sum(bmj$L == j), integer(1))
+K_country <- vapply(key$L, function(j) sum(bmj$W[bmj$L == j]), numeric(1))
+dat_bmj <- list(K = as.integer(K_country), N = N_country,
+                country = seq_len(nrow(key)))
+stopifnot(all(dat_bmj$K >= 0), all(dat_bmj$K <= dat_bmj$N))
+```
+
+### 59.3 Two explicit pooling specifications
+
+A strict no-pooling model gives independent country logits fixed priors, for example $\theta_j\sim\mathrm{Normal}(-1,1)$. A partial-pooling alternative learns their common center and spread:
+
+$$
+\theta_j=\bar\theta+\sigma_\theta z_j,\quad z_j\sim\mathrm{Normal}(0,1),
+\quad \bar\theta\sim\mathrm{Normal}(-1,1),
+\quad\sigma_\theta\sim\mathrm{Exponential}(1).
+$$
+
+Both use $p_j=\operatorname{logit}^{-1}(\theta_j)$ and the same binomial observations. These priors are illustrative choices to inspect and vary, not automatic defaults or a claimed reproduction of the official numerical solution.
+
+```{r b01-bmj-models}
+library(rethinking)
+m_bmj_np <- ulam(
+  alist(
+    K ~ dbinom(N, p),
+    logit(p) <- theta[country],
+    theta[country] ~ dnorm(-1, 1)
+  ), data = dat_bmj, chains = 4, cores = 4
+)
+m_bmj_pp <- ulam(
+  alist(
+    K ~ dbinom(N, p),
+    logit(p) <- theta_bar + z[country] * sigma,
+    z[country] ~ dnorm(0, 1),
+    theta_bar ~ dnorm(-1, 1),
+    sigma ~ dexp(1)
+  ), data = dat_bmj, chains = 4, cores = 4
+)
+```
+
+The supplied [solution PDF](../homework/homework_B01_solutions.pdf) calls a model with $a+b_j$ and fixed-scale priors on $b_j$ “no pooling.” Its shared unknown intercept $a$ nevertheless couples country inferences. Distinguish **fixed pooling scale** from the strictly independent country parameters used above. Also, the PDF's reference probability $1/7$ is not a universal weekend baseline: two equally likely weekend days in a seven-day week would give $2/7$; the operational event definition matters.
+
+### 59.4 Compare posterior probabilities and uncertainty
+
+```{r b01-bmj-compare}
+p_np <- link(m_bmj_np)
+p_pp <- link(m_bmj_pp)
+stopifnot(ncol(p_np) == nrow(key), ncol(p_pp) == nrow(key))
+ci_np <- apply(p_np, 2, quantile, probs = c(0.05, 0.95))
+ci_pp <- apply(p_pp, 2, quantile, probs = c(0.05, 0.95))
+ord <- order(colMeans(p_pp))
+ypos <- seq_along(ord)
+plot(colMeans(p_pp)[ord], ypos, yaxt = "n", xlim = c(0, 1),
+     xlab = "Probability of weekend submission", ylab = "",
+     pch = 16, col = 4)
+axis(2, at = ypos, labels = key$country_name[ord], las = 2, cex.axis = 0.55)
+segments(ci_pp[1, ord], ypos, ci_pp[2, ord], ypos, col = 4)
+points(colMeans(p_np)[ord], ypos + 0.2, pch = 1)
+segments(ci_np[1, ord], ypos + 0.2, ci_np[2, ord], ypos + 0.2)
+legend("bottomright", c("Partial pooling", "No pooling"),
+       col = c(4, 1), pch = c(16, 1), bty = "n")
+# A ranking of posterior means is not certainty about the highest country.
+prob_highest <- tabulate(max.col(p_pp, ties.method = "random"),
+                         nbins = ncol(p_pp)) / nrow(p_pp)
+report_bmj <- data.frame(
+  country = key$country_name, submissions = N_country,
+  raw_proportion = K_country / N_country,
+  mean_no_pool = colMeans(p_np), mean_partial_pool = colMeans(p_pp),
+  lower90 = ci_pp[1, ], upper90 = ci_pp[2, ], prob_highest = prob_highest
+)
+report_bmj[order(-report_bmj$mean_partial_pool), ]
+```
+
+Report which countries have high posterior probabilities together with intervals and ranking uncertainty after checking diagnostics. Explain changes using country sample size, observed proportions, and the learned scale. Small countries often move more, but shrinkage strength and direction must be read from the actual fits. No fitted country ranking is asserted by this code-only guide.
+
+---
+
 ## 60. Annex: Complete Solutions to Review Questions
+
+These answers follow the questions in section 54 and use the distribution conventions in section 0.
 
 #### 1. What distinguishes complete, no, and partial pooling?
 
-- **Complete pooling** assumes all groups share a single common parameter ($\alpha_j = \alpha$). It ignores all group variation, yielding low variance but severe underfitting if groups genuinely differ.
-- **No pooling** estimates an independent parameter $\alpha_j$ for each group under fixed broad priors without sharing information across groups. It matches sample means closely but overfits small/sparse groups and yields high variance.
-- **Partial pooling** treats group parameters as draws from a common population distribution $\alpha_j \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$ whose hyperparameters are estimated from the data. It adaptively balances group-specific data against population evidence.
+**Complete pooling** uses one common residual group parameter. **No pooling** estimates separate group parameters under fixed independent priors, which may still regularize each group. **Partial pooling** places group effects in a shared distribution whose hyperparameters are inferred jointly. It shares information without forcing equal effects; the useful amount of sharing depends on data and population assumptions.
 
 #### 2. Why is a varying intercept different from an unrelated group indicator?
 
-An unrelated group indicator assigns each group an independent parameter under a fixed, non-adaptive prior (no pooling). A varying intercept models group parameters as coming from a learned population distribution $\mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$. The adaptive population distribution shrinks estimates toward $\bar{\alpha}$ proportionally to group uncertainty, sharing information across groups and enabling valid predictions for unobserved groups.
+An unrestricted group-indicator model allows each group its own coefficient without a learned distribution linking them. A hierarchical varying intercept adds that distribution and propagates uncertainty about its center and spread. The design matrix can look the same; the difference lies in the prior structure and shared learning. Predictions for new groups additionally assume that those groups belong to the modeled population.
 
 #### 3. What makes the prior on $\alpha_j$ adaptive?
 
-The prior $\alpha_j \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$ is adaptive because its location $\bar{\alpha}$ and scale $\sigma_\alpha$ are unknown hyperparameters estimated jointly from all groups. As data accumulate from any group, estimates of $\bar{\alpha}$ and $\sigma_\alpha$ update, which in turn updates the prior distribution governing every individual group $\alpha_j$.
+The conditional prior $p(\alpha_j\mid\bar\alpha,\sigma_\alpha)$ depends on unknown hyperparameters informed by all groups. Full Bayes integrates over their posterior when estimating each group. “Adaptive” describes this feedback through a fixed joint probability model; it does not mean changing the prior after inspecting the data or counting observations twice.
 
 #### 4. How do group sample size and $\sigma_\alpha$ affect shrinkage?
 
-The shrinkage weight $w_j = \frac{\sigma_\alpha^2}{\sigma_\alpha^2 + V_j}$ determines how much weight is given to group $j$'s raw sample estimate $\widehat{\alpha}_j$ versus the population mean $\bar{\alpha}$:
-- **Group sample size ($N_j$):** Larger sample size reduces sampling variance $V_j$, so $w_j \to 1$ (less shrinkage). Smaller $N_j$ increases $V_j$, so $w_j \to 0$ (stronger shrinkage toward $\bar{\alpha}$).
-- **Population variance ($\sigma_\alpha^2$):** Larger $\sigma_\alpha^2$ means groups are genuinely heterogeneous, so $w_j \to 1$ (less shrinkage). Smaller $\sigma_\alpha^2$ means groups are homogeneous, so $w_j \to 0$ (stronger shrinkage).
+In the conditional Gaussian example, $w_j=\sigma_\alpha^2/(\sigma_\alpha^2+V_j)$ weights the group's own estimate and $1-w_j$ weights the population center. More group information usually reduces $V_j$ and weakens pooling. A small population scale strengthens pooling. This identity is exact for known Gaussian variances and hyperparameters; nonlinear models and uncertain hyperparameters require posterior inference rather than a universal sample-size weighting rule.
 
 #### 5. Why can biased shrinkage estimates have lower mean squared error?
 
-Mean squared error decomposes into $\mathrm{MSE} = \mathrm{Bias}^2 + \mathrm{Variance}$. No-pooling estimates are unbiased for individual group means but have high variance for small samples. Shrinkage introduces a small amount of bias toward $\bar{\alpha}$, but drastically reduces estimation variance. When the variance reduction exceeds the squared bias, total MSE decreases substantially.
+For a scalar estimator, repeated-sampling mean squared error is variance plus squared bias. Shrinkage can reduce variance enough to offset the bias it introduces. It need not improve every group or every dataset, and no-pooling Bayesian estimates are not automatically unbiased. A misspecified hierarchy can make sharing harmful; compare performance across plausible simulation scenarios.
 
 #### 6. How can one café's observation affect another café's posterior?
 
-Observations from Café A update the posterior distributions of the population hyperparameters $\bar{\alpha}$ and $\sigma_\alpha$. Because Café B's prior is $\alpha_B \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$, any shift in $\bar{\alpha}$ or $\sigma_\alpha$ directly updates Café B's prior and posterior, even if Café B has no direct observations.
+Café A's data update the shared population hyperparameters. Café B's posterior averages over those hyperparameters, so it can change even without new observations at B. The fixed joint model connects the cafés through their population distribution; it does not insert A's observations directly into B's likelihood.
 
 #### 7. What is the difference between a café-specific parameter and the café population distribution?
 
-- A **café-specific parameter** $\alpha_j$ represents the latent log-wait time of a specific observed café $j$.
-- The **café population distribution** $\mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$ describes the distribution of log-wait times across the entire infinite population of potential cafés from which the sampled cafés were drawn.
+$\alpha_j$ is the log expected count for a particular café in the simplified Poisson model. The population distribution describes variation among café intercepts through $\bar\alpha$ and $\sigma_\alpha$. An observed café uses its fitted effect; a new café requires a fresh effect drawn from that distribution, conditional on a posterior hyperparameter draw. A population need not be literally infinite to use this model.
 
 #### 8. What is the reed-frog likelihood?
 
-The reed-frog observation model uses a Binomial likelihood:
-
-$$ S_j \sim \mathrm{Binomial}(D_j, p_j) $$
-
-where $S_j$ is the count of surviving tadpoles in tank $j$, $D_j$ is the initial density (number of trials), and $p_j = \mathrm{logit}^{-1}(\alpha_j)$ is the tank-specific survival probability.
+For tank $j$, $S_j\sim\mathrm{Binomial}(D_j,p_j)$, where $D_j$ is the initial tadpole count and $S_j$ the survivors. In the intercept-only hierarchy, $p_j=\operatorname{logit}^{-1}(\alpha_j)$. Conditional on this probability, the binomial assumes independent trials with a common survival probability in the tank. With predictors, replace $\alpha_j$ by the complete linear predictor.
 
 #### 9. Why do small tanks shrink more strongly?
 
-Small tanks ($D_j = 10$) have larger sampling variance $V_j \approx \frac{1}{D_j p_j (1-p_j)}$ on the logit scale compared to large tanks ($D_j = 35$). In the partial pooling weighting formula $w_j = \frac{\sigma_\alpha^2}{\sigma_\alpha^2 + V_j}$, larger $V_j$ yields a smaller $w_j$, causing estimates for small tanks to shrink more strongly toward the population mean $\bar{\alpha}$.
+At comparable probabilities, fewer tadpoles provide less likelihood information about a tank's logit. Locally that information is $D_jp_j(1-p_j)$, so weaker evidence gives the population distribution more influence. Tank size alone does not determine shrinkage: extreme outcomes, predictors, and hyperparameter uncertainty also matter. The local normal approximation can be poor for all-zero or all-one outcomes.
 
 #### 10. Why do raw proportions of zero and one not imply true probabilities of zero and one?
 
-In small samples ($D_j = 10$), observing $S_j = 0$ or $S_j = 10$ is easily produced by sampling variation even if the true probability $p_j$ is 0.15 or 0.85. On the log-odds scale, $p_j = 0$ corresponds to $\alpha_j = -\infty$ and $p_j = 1$ to $\alpha_j = +\infty$. Binomial likelihood uncertainty combined with the population prior prevents estimates from collapsing to infinity.
+Finite samples can be extreme under non-extreme probabilities: for example, $\Pr(S_j=0\mid D_j=10,p_j=0.15)=0.85^{10}\approx0.197$. Observing zero survivors therefore does not establish certain death. A proper finite-logit prior keeps the probability in $(0,1)$ while the posterior describes uncertainty about how close to a boundary it lies.
 
 #### 11. What does $\sigma_\alpha$ control in the tadpole model?
 
-$\sigma_\alpha$ measures the standard deviation of tank baseline survival propensities on the log-odds scale. It controls the degree of adaptive regularization: when $\sigma_\alpha \to 0$, all tanks are forced to share the same survival rate (complete pooling); when $\sigma_\alpha \to \infty$, tanks are estimated independently (no pooling).
+$\sigma_\alpha$ is the between-tank standard deviation on the log-odds scale, not a standard deviation of probabilities or survivor counts. Small values imply strong pooling; larger values allow greater residual heterogeneity and generally less pooling. It does not determine the whole outcome variance by itself, and taking it arbitrarily large is not necessarily equivalent to a particular proper no-pooling prior.
 
 #### 12. Why can a model with 48 varying intercepts have far fewer than 48 effective parameters?
 
-Shrinkage restricts the freedom of the 48 intercepts by constraining them to lie within the population distribution $\mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$. When $\sigma_\alpha$ is small, the 48 parameters are pulled tightly together and vary mostly in unison, functioning effectively as a single parameter plus a scale term. Thus, $p_{\mathrm{WAIC}}$ or $p_{\mathrm{LOO}}$ is much smaller than 48.
+A strong shared hierarchy limits how independently the tank effects adapt to the observations. Their effective predictive flexibility can therefore be much smaller than their nominal count. Quantities such as $p_{\mathrm{LOO}}$ depend on the likelihood, priors, posterior, and scoring units; they are estimates of complexity, not a fixed count guaranteed to be below 48 in every fit.
 
 #### 13. How does adding predator status change the meaning of tank variation?
 
-In the intercept-only model $\mathrm{logit}(p_j) = \alpha_j$, $\sigma_\alpha$ measures *total* between-tank variation. When adding predator presence $\mathrm{logit}(p_j) = \alpha_j + \beta_P P_j$, $\alpha_j$ represents residual tank intercept after controlling for predators, and $\sigma_\alpha$ measures *unexplained residual* between-tank variation. The decrease in $\sigma_\alpha$ quantifies how much tank heterogeneity is explained by predation.
+In the intercept-only model, the hierarchy represents between-tank logit differences without a predator explanation. With $\eta_j=\alpha_j+\beta_PP_j$, the population scale describes remaining tank differences after including predator status. A decrease in that scale suggests the predictor explains some variation, but is not guaranteed. Examine $\beta_P$, probability contrasts, and predictive fit as well.
 
 #### 14. What does exchangeability mean?
 
-Exchangeability means that the joint prior distribution of group parameters $p(\alpha_1, \dots, \alpha_J)$ is invariant to permutations of the group indices $1, \dots, J$. Informally, it assumes that before observing outcomes, we have no background information distinguishing one group from another.
+Exchangeability means that relabeling groups leaves their joint distribution unchanged, conditional on the modeled background information. Identically distributed independent residual effects given hyperparameters imply this property. Marginal independence is not required: shared unknown hyperparameters create dependence among group parameters after integration.
 
 #### 15. Which kinds of group differences can violate exchangeability?
 
-Exchangeability is violated when groups possess known structural ordering or grouping that is omitted from the model—such as spatial location, time of measurement, hierarchical nesting (tanks within ponds), or known group-level covariates (e.g., predator presence, country developmental status).
+Known population subtypes, omitted group predictors, spatial proximity, temporal order, or nesting can make one undifferentiated exchangeable distribution inappropriate. Model those differences with predictors, separate hierarchies, or structured dependence. The issue is whether the remaining residual group effects are plausibly exchangeable after these distinctions are represented.
 
 #### 16. What is the centered hierarchy?
 
-The centered hierarchy parameters specifies group parameters directly from the population distribution:
-
-$$ \alpha_j \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha) $$
-
-The sampler updates $\alpha_j$ conditional on $\bar{\alpha}$ and $\sigma_\alpha$.
+The centered hierarchy samples the group parameters directly under $\alpha_j\sim\mathrm{Normal}(\bar\alpha,\sigma_\alpha)$ with hyperpriors on the center and scale. When the scale is small, all intercepts must lie close to the center, which can create a narrow region of posterior geometry. HMC explores the parameters jointly; “centered” does not mean it performs Gibbs updates.
 
 #### 17. How does the non-centered form represent the same model?
 
-The non-centered parameterization defines standardized parameters $z_j \sim \mathrm{Normal}(0, 1)$ and computes group intercepts deterministically:
-
-$$ \alpha_j = \bar{\alpha} + \sigma_\alpha z_j $$
-
-Because a linear transformation of a standard normal yields $\mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$, the joint prior density $p(\alpha, \bar{\alpha}, \sigma_\alpha)$ is mathematically identical.
+Sample $z_j\sim\mathrm{Normal}(0,1)$ and define $\alpha_j=\bar\alpha+\sigma_\alpha z_j$. This induces the same conditional normal distribution for $\alpha_j$. Keeping the likelihood and hyperpriors unchanged preserves the scientific posterior over the original quantities, while changing the coordinates used by the sampler.
 
 #### 18. When is non-centering often advantageous?
 
-Non-centering is advantageous when sample size per group ($N_j$) is small or data are sparse. Under centered parameterization, as $\sigma_\alpha \to 0$, the posterior forms a narrow geometry (Neal's funnel) that creates severe MCMC divergences. Non-centering decouples $z_j$ from $\sigma_\alpha$ in the proposal geometry, eliminating the funnel and resolving divergences.
+It often helps when individual group effects are weakly informed by the likelihood and their dependence on the population scale creates a funnel. Non-centering removes that dependence in the prior coordinates, but the likelihood can still create difficult geometry. Strongly informed effects may favor centering. Compare diagnostics and efficiency for the same parameters rather than assuming one form always wins.
 
 #### 19. What two clustering dimensions occur in the trolley model?
 
-The trolley dataset features cross-classified clustering across:
-1. **Participants ($U_i$):** Repeated scenario evaluations by the same individual.
-2. **Stories ($S_i$):** Repeated scenario evaluations using the same narrative script.
+Responses are grouped both by **participant**, who evaluates several scenarios, and by **story**, evaluated by several participants. These are crossed groupings because a story is not uniquely nested inside one participant. Their varying intercepts enter the same predictor and have separate population scales. Prediction must specify whether each grouping level is known or new.
 
 #### 20. Why does ignoring participant clustering create pseudoreplication?
 
-Ignoring participant clustering treats multiple answers from one person as independent samples of human moral judgment. This inflates the nominal sample size, artificially shrinks standard errors, produces overconfident $p$-values/credible intervals, and misattributes individual personality bias to experimental factors.
+Repeated answers from one person share persistent causes. Treating them as independent replications of people can exaggerate the information about population-level effects and understate uncertainty. A participant intercept models stable response tendencies, but additional dependence or varying treatment responses may need further structure. More responses and more participants are different sources of information.
 
 #### 21. How does full Bayes differ from empirical Bayes?
 
-- **Empirical Bayes** estimates hyperparameters $(\widehat{\bar{\alpha}}, \widehat{\sigma}_\alpha)$ via point optimization (e.g., marginal maximum likelihood) and plugs them in as fixed constants when estimating $\alpha_j$.
-- **Full Bayes** assigns hyperpriors to $\bar{\alpha}$ and $\sigma_\alpha$ and integrates over their full posterior distribution $p(\bar{\alpha}, \sigma_\alpha \mid D)$, fully propagating hyperparameter uncertainty into group-level and predictive distributions.
+Empirical Bayes typically estimates hyperparameters and plugs them into group-level calculations. Full Bayes puts priors on those quantities and integrates over their posterior uncertainty. A naive plug-in approach omits an uncertainty source, especially relevant with few groups; some empirical-Bayes methods add corrections. Full Bayes still depends on the chosen hyperpriors and model.
 
 #### 22. How is prediction for an observed group constructed?
 
-For an observed group $j$, draw posterior samples of that specific group's intercept $\alpha_j^{(s)}$ from the MCMC chain, and evaluate the observation model:
-
-$$ Y_{\mathrm{new}, j}^{(s)} \sim p\left( Y \mid \alpha_j^{(s)}, X \right) $$
-
-This incorporates both hyperparameter uncertainty and specific knowledge about group $j$.
+Use a joint posterior draw containing the fitted effect $\alpha_j^{(s)}$ and any other required coefficients. Compute the mean through the inverse link, then simulate the new outcome from its likelihood. The first step gives uncertainty about the mean; the additional sampling step gives a predictive distribution for an observation. Use the same group's effect for all its new observations within that draw.
 
 #### 23. How is prediction for a new group constructed?
 
-For an unobserved new group:
-1. Draw hyperparameter samples $(\bar{\alpha}^{(s)}, \sigma_\alpha^{(s)})$ from posterior draw $s$.
-2. Simulate a new group intercept: $\alpha_{\mathrm{new}}^{(s)} \sim \mathrm{Normal}\left( \bar{\alpha}^{(s)}, \sigma_\alpha^{(s)} \right)$.
-3. Simulate outcomes: $Y_{\mathrm{new}}^{(s)} \sim p\left( Y \mid \alpha_{\mathrm{new}}^{(s)}, X \right)$.
-
-This incorporates population-level variance $\sigma_\alpha$.
+For each joint posterior draw, retain the population parameters, draw one new group effect $\alpha_{\mathrm{new}}^{(s)}\sim\mathrm{Normal}(\bar\alpha^{(s)},\sigma_\alpha^{(s)})$, add predictors, apply the inverse link, and simulate outcomes. Reuse that effect for repeated observations in the same new group. This propagates hyperparameter uncertainty, group heterogeneity, and observation noise.
 
 #### 24. Why is setting a new group's effect to zero incorrect?
 
-Setting $\alpha_{\mathrm{new}} = \bar{\alpha}$ (or 0) assumes the new group is exactly average, ignoring between-group variance $\sigma_\alpha$. This severely underestimates prediction uncertainty for new groups and, for non-linear link functions, gives a biased expectation of outcomes due to non-linear transformation.
+Setting the standardized offset $z_{\mathrm{new}}$ to zero describes the population-center group, with $\alpha_{\mathrm{new}}=\bar\alpha$. Setting the full intercept to zero is a different assertion unless $\bar\alpha=0$. Neither operation represents a random new group when the population has nonzero spread. Under nonlinear links it also generally changes the mean prediction; symmetry can produce exceptions for means, but not remove group heterogeneity.
 
 #### 25. Why can cluster-specific and population-average probability effects differ?
 
-Because the logit transformation $\mathrm{logit}^{-1}(x) = \frac{1}{1 + e^{-x}}$ is non-linear (convex for $x < 0$, concave for $x > 0$), Jensen's inequality implies:
-
-$$ \mathbb{E}\left[ \mathrm{logit}^{-1}(\bar{\alpha} + \beta + \epsilon) \right] \neq \mathrm{logit}^{-1}\left( \bar{\alpha} + \beta \right) $$
-
-A cluster-specific effect evaluates probability change for a fixed $\alpha_j$, whereas a population-average effect averages probability changes across the entire distribution of group intercepts $\alpha_j \sim \mathrm{Normal}(\bar{\alpha}, \sigma_\alpha)$.
+A probability contrast $\operatorname{logit}^{-1}(\alpha_j+\beta)-\operatorname{logit}^{-1}(\alpha_j)$ depends on the baseline intercept. Averaging such contrasts over a group distribution can differ from evaluating the contrast at a single intercept. There is no universal direction from Jensen's inequality because the inverse logit changes curvature. State whether the population weights groups or individuals equally.
 
 #### 26. Why does a varying intercept not automatically solve treatment confounding?
 
-If treatment assignment $X_{ij}$ depends on unobserved group characteristics correlated with $\alpha_j$ (e.g., higher-income districts receiving more health clinics), the model $\mathrm{logit}(p_{ij}) = \alpha_j + \beta X_{ij}$ assumes $\alpha_j \perp X_{ij}$ in the prior hierarchy. This causes the group intercept to absorb part of the treatment effect or vice versa, resulting in biased estimates of $\beta$.
+A varying intercept represents residual group structure, not the treatment assignment process. If treatment is associated with omitted group causes of the outcome, an independent residual-intercept assumption may be inappropriate. Within–between terms can model some of that relationship, but identification still requires an appropriate causal argument, overlap, and assumptions about remaining confounding.
 
 #### 27. How does a random-intercept model differ causally from a unit fixed-effects design?
 
-- A **unit fixed-effects design** includes unrestricted group indicators, effectively conditioning on group identity and estimating $\beta$ exclusively from within-group variation. It is immune to time-invariant between-group confounding.
-- A **standard random-intercept model** pools between-group and within-group variation. If between-group variation is confounded, the random-intercept estimate of $\beta$ is biased unless group-level covariate means $\bar{X}_j$ are explicitly included (Mundlak parameterization).
+In an additive linear model, unit indicators permit unrestricted stable unit differences and identify slopes from within-unit changes. They do not resolve time-varying confounding or identify a treatment constant within units. A standard hierarchical intercept model also shares information and can use between-unit variation under its assumptions. Mundlak terms help distinguish within- and between-unit associations; neither approach is automatically a causal design, and nonlinear models require additional care.
 
 #### 28. Which metadata should CausalOps store about a hierarchy?
 
-CausalOps should store:
-- `cluster_id` and indexing columns;
-- `observation_unit` and repeated measures identifiers;
-- `exchangeability_assumptions` and conditioning variables;
-- `hierarchy_family` (e.g., Normal, Student-t);
-- `parameterization` (centered vs non-centered);
-- `hyperprior_specifications` for mean and scale terms;
-- `prediction_mode` rules (conditional vs new-cluster).
+Store group IDs and mappings, observation units, nested or crossed membership, outcome support, trial denominators or exposures, group-level predictors, the hierarchy family, hyperpriors, and exchangeability assumptions. Also record computational parameterization, diagnostics, prediction mode, target-population weights, and validation holdout units. These distinguish predictions for observed groups from transport to a new group population.
 
 #### 29. How would you validate partial pooling by simulation?
 
-1. Define a true population distribution $\alpha_j^{\mathrm{true}} \sim \mathrm{Normal}(\bar{\alpha}_{\mathrm{true}}, \sigma_{\text{true}})$.
-2. Generate $J$ groups with varying sample sizes $N_j$, including very small $N_j$.
-3. Simulate outcomes $Y_{ij} \sim p(Y \mid \alpha_j^{\mathrm{true}})$.
-4. Fit complete-pooling, no-pooling, and partial-pooling models to the synthetic data.
-5. Compute estimation error $\mathrm{RMSE} = \sqrt{\frac{1}{J}\sum (\widehat{\alpha}_j - \alpha_j^{\mathrm{true}})^2}$ and 95% posterior interval coverage for all three models.
-6. Verify that partial pooling achieves minimal total RMSE and correct coverage across sample sizes.
+Simulate group parameters and observations under declared populations, fit all three pooling strategies, and repeat over many datasets. Compare error, interval coverage, and predictive calibration for group probabilities, hyperparameters, and relevant contrasts. Include sparse groups, unequal group sizes, and departures from the fitted hierarchy. Do not define success as partial pooling always winning: the purpose is to learn where the workflow works and where it fails. SBC adds a separate prior-averaged computational check.
 
 #### 30. Why is the official Chapter 12 label a mismatch for the uploaded second edition?
 
-The 2026 course outline uses a draft 3rd edition numbering where Chapter 12 introduces Multilevel Models. In the uploaded 2nd edition of *Statistical Rethinking*, Chapter 12 covers Logistic/Poisson GLMs, Overdispersion, Zero Inflation, and Ordered Categories, while Multilevel Models (varying intercepts, tadpoles, non-centered priors) are covered in **Chapter 13 (*Models With Memory*)**.
+The local course schedule assigns B01 to Chapter 12, whereas the multilevel material described here corresponds to second-edition Chapter 13, *Models With Memory*. Second-edition Chapter 12 treats mixtures, overdispersion, zero inflation, and ordered outcomes. Preserve the schedule label but use the explicit second-edition mapping; the label alone does not establish the contents or numbering of an unavailable later edition.

@@ -41,6 +41,8 @@ execute:
 ***
 ## 0. Notation and reading conventions
 
+**[Orientation](#a10-problem-map).** Define the notation and distinguish observed variables, latent assumptions, and posterior uncertainty.
+
 This chapter uses one notation throughout. A symbol is introduced here before it enters a model; when its meaning changes in the CRM example, the new meaning is stated locally.
 
 ### 0.1 Variables and indices
@@ -135,9 +137,41 @@ The goal is to determine:
 
 Sensitivity analysis converts an unverifiable statement into an auditable set of assumptions.
 
+### 1.1 Reading map: which problem are we solving? {#a10-problem-map}
+
+A09 asked how to estimate event probabilities and compare groups with different compositions. A10 asks **whether those comparisons retain their causal meaning when an important variable is unobserved**. Most of this chapter follows one admissions example: applicants choose departments, departments admit applicants, and an unmeasured applicant characteristic can influence both processes.
+
+Read the chapter as four connected problems. Problem 1 has three stages: define the causal question, test it in a simulation, and examine how the answer changes under explicit assumptions about the missing variable.
+
+| Problem or transition | Question to keep in mind | Sections | Example and output |
+|---|---|---|---|
+| **1A — Define the admissions comparison** | Can adjusting for department create bias, and which contrast do we actually want? | [3–5](#baseline-admissions-graph) | Admissions DAG; total versus department-held-fixed estimands |
+| **1B — Learn from a known simulation** | What do models miss when the simulated applicant characteristic is hidden? | [6–10](#the-a10-simulated-data-generating-process) | Simulated admissions; naïve models and an observed-confound benchmark |
+| **1C — Test sensitivity to the missing variable** | How strongly would the latent characteristic have to affect selection and admission to change the conclusion? | [11–23](#joint-latent-confounding-model) | Joint model; scenario contrasts, prior sensitivity, and tipping points |
+| **2 — Work with limited real measurements** | What can grouped admissions data and imperfect proxies tell us about the missing characteristic? | [24–30](#the-real-ucbadmit-analysis) | Real `UCBadmit` counts, then proxy measurement models and their assumptions |
+| **3 — Check what supports the conclusion** | Is a change due to confounding, the nonlinear scale, modeling assumptions, or unreliable computation? | [31–39](#omitted-variables-under-nonlinear-links) | Interpretation checks, predictive checks, diagnostics, and better data collection |
+| **4 — Transfer the workflow to CRM** | Could unobserved customer affinity change a campaign or targeting decision? | [40–43](#crm-application-unobserved-customer-affinity) | Purchase and offer-assignment models; proxies and a profit-aware tipping-point report |
+| **Operational bridge — Record the evidence** | How can the assumptions and robustness results be made auditable? | [44–45](#implications-for-causalops) | CausalOps artifacts; separate data, structural assumptions, and prior information |
+
+**The simulated admissions block starts at 6 and ends at 23. The real-data discussion starts at 24.** In a simulation, the generating variable is known to us even when we hide it from the fitted model. In the real analysis, its values are unavailable: the simulation's benchmark cannot simply be reproduced. Sections 27–30 explain how additional proxy measurements could help; they do not imply that such measurements are present in `UCBadmit`.
+
+**The CRM application starts at 40 and ends at 43.** It reuses the causal reasoning with customers, offers, and purchases. The local meanings of the symbols change there. Unlike A09, A10 has no separate Poisson case-study block: references to mixtures and nonlinear links support the sensitivity argument.
+
+### 1.2 How the steps connect, and where to return
+
+Within Problem 1C, **11–14** build the joint model and specify the sensitivity assumptions; **15–18** explain identification and averaging over the unobserved factor; **19–23** translate the model into probability contrasts and robustness conclusions. A tipping point is meaningful only relative to the estimand and the range of assumptions declared earlier.
+
+Within Problem 3, **31–33** clarify what a changing coefficient or incompletely identified contrast means; **34–38** check predictions, computation, and alternative sensitivity models; **39** turns the remaining uncertainty into a data-collection question. A model that reproduces observed data does not thereby establish that its hidden-confounding assumptions are correct.
+
+Sections **0–2** provide notation, the main question, and the book correspondence. Sections **46–48** consolidate the argument through common errors, takeaways, and review questions. Sections **49–51** provide reading, code, and source guides. For a first conceptual pass, follow **3–5 → 6–10 → 11–14 → 19–23**, then return to **15–18** to understand what identifies the latent model. Read **24–39** before transferring the conclusions to real data, and **40–45** for the business application and its reporting requirements.
+
+Each numbered section below starts with a linked problem label and a sentence explaining its role. Use that link to return to this map whenever a new equation or example obscures the question being answered.
+
 ***
 
 ## 2. Relationship to the book
+
+**[Orientation](#a10-problem-map).** Locate the sensitivity argument in the book and understand the mismatch with the assigned chapter.
 
 The official Chapter 12 assignment does not align directly with the second-edition chapter title or contents.
 
@@ -176,6 +210,8 @@ This is conceptually relevant to A10, even though the chapter does not present t
 ***
 
 ## 3. Baseline admissions graph
+
+**[Problem 1A — Admissions comparison](#a10-problem-map).** Specify how gender category, department selection, and the unobserved applicant characteristic could jointly affect admission.
 
 Let:
 
@@ -221,6 +257,8 @@ This dual role is the source of the sensitivity problem.
 
 ## 4. The causal trap in department adjustment
 
+**[Problem 1A — Admissions comparison](#a10-problem-map).** Explain why conditioning on department can open a path through the unobserved characteristic.
+
 Without conditioning on department, the collider path is closed:
 
 $$ G \rightarrow D \leftarrow U \rightarrow A $$
@@ -246,6 +284,8 @@ The adjustment is not merely imprecise. It may target a systematically distorted
 ***
 
 ## 5. Total and direct estimands
+
+**[Problem 1A — Admissions comparison](#a10-problem-map).** Choose between a total contrast and a department-held-fixed contrast before interpreting any model.
 
 ### 5.1 Total effect or total category contrast
 
@@ -289,6 +329,8 @@ The former opens the collider path. The latter conceptually breaks the natural c
 ***
 
 ## 6. The A10 simulated data-generating process
+
+**[Problem 1B — Known simulation](#a10-problem-map).** Create applicants with a known hidden characteristic so that the consequences of omitting it can be examined.
 
 In this simulation $N$ is fixed at 2,000, $G_i\in\{1,2\}$, and the probability vector $(0.5,0.5)$ gives each category probability one half. The value $U_i=1$ labels the high-latent-characteristic state; it is not a one-standard-deviation value of the later Gaussian factor.
 
@@ -336,6 +378,8 @@ $$ G,D,U \rightarrow A $$
 
 ## 7. An intentional model mismatch
 
+**[Problem 1B — Known simulation](#a10-problem-map).** Distinguish the binary simulation truth from the continuous factor used later for sensitivity analysis.
+
 The simulated latent variable is binary:
 
 $$ U_i^{\mathrm{true}} \in \{0,1\} $$
@@ -359,6 +403,8 @@ $$ \text{latent sensitivity factor} \neq \text{known true applicant ability meas
 ***
 
 ## 8. Naïve total model
+
+**[Problem 1B — Known simulation](#a10-problem-map).** Establish the aggregate comparison without department adjustment or access to the hidden variable.
 
 For group $g$, $a_g$ is the baseline log odds of admission, $p_i$ is applicant $i$'s admission probability, and $a_g\sim\mathrm{Normal}(0,1)$ is a prior statement rather than an observed sampling distribution. The contrast $\Delta_a$ is on the log-odds scale, whereas $\Delta_p$ is a difference in admission probabilities.
 
@@ -389,6 +435,8 @@ It estimates the observed total category contrast, which includes differences in
 
 ## 9. Naïve department-specific model
 
+**[Problem 1B — Known simulation](#a10-problem-map).** Examine the within-department comparison when the hidden variable is still omitted.
+
 The second model is:
 
 $$ A_i \sim \mathrm{Bernoulli}(p_i) $$
@@ -415,6 +463,8 @@ This is the quantity the sensitivity model attempts to reassess.
 
 ## 10. If the confound were observed
 
+**[Problem 1B — Known simulation](#a10-problem-map).** Use the observed simulation confound as a benchmark that is unavailable in the real admissions data.
+
 The coefficient $\beta_U$ is the change in admission log odds associated with changing the observed binary characteristic from $U_i=0$ to $U_i=1$, holding gender and department fixed. A positive-effect constraint such as $\beta_U>0$ orients “higher” $U$ as favorable; it is a substantive restriction, not a consequence of the data.
 
 
@@ -439,6 +489,8 @@ This provides a benchmark for the latent sensitivity model.
 ***
 
 ## 11. Joint latent-confounding model
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Represent department selection and admission jointly through a shared unobserved factor.
 
 The two likelihoods share the same person-specific latent value $u_i$. In the admission equation, $a_{g,d}$ is a gender-by-department baseline log odds and $b_g$ is the admission log-odds change per one-unit increase in $u$. In the selection equation, $D_{2i}=1$ means that applicant $i$ selected department 2, $q_i=\Pr(D_{2i}=1)$, $\delta_g$ is a group-specific baseline selection log odds, and $g_g$ is the corresponding latent selection coefficient. The letter $g$ is therefore used both as a group index and, in $g_g$, as the conventional name of a coefficient vector; the subscript always identifies the group.
 
@@ -470,6 +522,8 @@ This shared influence induces the required dependence between department selecti
 ***
 
 ## 12. Sensitivity parameters
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Give the hidden factor’s influence on admission and selection an explicit, interpretable scale.
 
 The group-indexed coefficient vectors
 
@@ -508,6 +562,8 @@ Sensitivity analysis asks how the target contrast changes as these parameters va
 
 ## 13. Fixed sensitivity scenarios
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Compare conclusions under fixed assumptions about the strength of the hidden pathways.
+
 In vector notation, $\boldsymbol b=(b_1,b_2)$ and $\boldsymbol g=(g_1,g_2)$. Thus the scenario below fixes four coefficients; it does not set either observed variable $G$ or a generic group label $g$.
 
 
@@ -543,6 +599,8 @@ That is precisely what makes it a sensitivity analysis.
 
 ## 14. Priors over sensitivity parameters
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Express uncertainty over sensitivity assumptions with priors and examine their implications.
+
 The A10-specific script then removes the fixed values and assigns:
 
 $$ b_g \sim \mathrm{Uniform}(0,1) $$
@@ -572,6 +630,8 @@ The prior range should therefore be scientifically justified.
 ***
 
 ## 15. Sensitivity parameters may be weakly identified
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Explain why observed outcomes may not determine the sensitivity coefficients precisely.
 
 Observed data contain:
 
@@ -610,6 +670,8 @@ This is not a defect when the goal is explicit scenario averaging. It becomes a 
 ***
 
 ## 16. Scale and sign identification
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Anchor the latent factor’s units and orientation before comparing coefficient values.
 
 In the scale transformation, $c$ is any positive constant. The products remain unchanged because $(b_g/c)(cu_i)=b_gu_i$ and $(g_g/c)(cu_i)=g_gu_i$. Negative $c$ additionally reverses orientation and is represented separately by the sign transformation below. Fixing the latent standard deviation to one removes arbitrary rescaling; a sign constraint or interpretive convention removes the remaining orientation ambiguity.
 
@@ -654,6 +716,8 @@ Identification conventions define the meaning of the latent factor.
 
 ## 17. Why the joint model carries information
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Identify what observing both selection and admission contributes to learning about the shared factor.
+
 Let $\boldsymbol u=(u_1,\ldots,u_N)$ collect the individual latent values; let $\boldsymbol a$, $\boldsymbol\delta$, $\boldsymbol b$, and $\boldsymbol g$ collect their respective model coefficients. Bayes' rule gives the posterior density below, where the two likelihood factors correspond to admission and selection and the remaining factors are priors. Conditional-independence assumptions justify this factorization.
 
 
@@ -686,6 +750,8 @@ The hierarchical distribution and shared process assumptions do much of the work
 
 ## 18. Marginalizing the latent factor
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Average over the unobserved factor to obtain quantities connected to observed outcomes.
+
 The observed admission probability within a gender-department cell is a mixture:
 
 $$ p(A=1 \mid G=g,D=d) = \int p(A=1 \mid G=g,D=d,u) p(u \mid G=g,D=d) \,du $$
@@ -708,6 +774,8 @@ The joint model attempts to separate them using explicit assumptions.
 ***
 
 ## 19. Probability-scale sensitivity estimands
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Translate each sensitivity assumption into the probability-scale estimand chosen earlier.
 
 The density $p_{\mathrm{target}}(u)$ is a declared standardization distribution for the latent factor—for example, $\mathrm{Normal}(0,1)$ or the posterior distribution in a target population. It must integrate to one. The overbar in $\overline p_{g,d}^{(s)}$ means that the conditional probability has been averaged over this same distribution for both groups, so the resulting contrast is not driven by different latent compositions.
 
@@ -735,6 +803,8 @@ The target distribution of $u$ must be declared.
 ***
 
 ## 20. Scenario sensitivity versus prior-weighted sensitivity
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Distinguish separate scenario results from an average weighted by a prior over scenarios.
 
 There are two distinct analysis styles.
 
@@ -776,6 +846,8 @@ This integral averages the scenario-specific posterior over the posterior weight
 
 ## 21. Tipping-point analysis
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Find which sensitivity assumptions cross a declared scientific or decision threshold.
+
 A useful sensitivity question is: how strong must the unobserved confounding be to change the substantive conclusion?
 
 Let $\tau(\boldsymbol b,\boldsymbol g)$ be the target contrast under the admission-sensitivity vector $\boldsymbol b$ and selection-sensitivity vector $\boldsymbol g$. A **sign tipping point** is any sensitivity setting satisfying
@@ -809,6 +881,8 @@ The first is the posterior probability of a positive contrast under the specifie
 
 ## 22. Robust and fragile conclusions
 
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** State which conclusions survive the examined assumptions and which depend on them.
+
 A conclusion is relatively robust when it remains materially similar across a broad, scientifically plausible sensitivity region.
 
 A conclusion is fragile when:
@@ -829,6 +903,8 @@ It cannot prove that no other unmodeled structure matters.
 ***
 
 ## 23. Sensitivity analysis is not p-hacking
+
+**[Problem 1C — Latent sensitivity](#a10-problem-map).** Keep the estimand and plausibility criteria explicit when exploring alternative conclusions.
 
 P-hacking tries many analyses and selectively reports a favorable one.
 
@@ -855,6 +931,8 @@ A sensitivity report should preserve:
 ***
 
 ## 24. The real `UCBadmit` analysis
+
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Leave the known simulation and ask what the real grouped admissions observations can support.
 
 For cell $(g,d)$, $N_{g,d}$ is the number of applications, $A_{g,d}$ is the number admitted, and $p_{g,d}$ is the cell admission probability. The binomial likelihood represents grouped counts; it does not assert that applicant-level covariates were observed.
 
@@ -889,6 +967,8 @@ This limitation must be stated explicitly.
 
 ## 25. Why aggregation matters for latent confounding
 
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Explain why expanding grouped counts does not recover missing individual measurements.
+
 The grouped likelihood records:
 
 - number admitted;
@@ -913,6 +993,8 @@ It changes the computational representation, not the information content.
 ***
 
 ## 26. Six-department selection model
+
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Extend the department-selection component to the six departments in the real example.
 
 Here $\boldsymbol\theta_g=(\theta_{g,1},\ldots,\theta_{g,6})$ is a six-component vector of department logits for group $g$. Because adding the same constant to every component leaves softmax probabilities unchanged, one logit must be fixed as a reference or another location constraint must be imposed. A latent adjustment to one component changes that department's probability and, through softmax normalization, the probabilities of all six departments.
 
@@ -944,6 +1026,8 @@ An outcome regression alone cannot represent how the latent variable changes the
 
 ## 27. Proxies for the latent confound
 
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Introduce additional noisy measurements that could inform the otherwise unobserved characteristic.
+
 For proxy $j\in\{1,2,3\}$, $T_{ji}$ is applicant $i$'s observed proxy value and $\tau_j>0$ is its residual standard deviation around $u_i$. The rate-one exponential prior on $\tau_j$ has mean one. Smaller $\tau_j$ means a more precise proxy; it must not be confused with an effect estimand also conventionally denoted by $\tau$.
 
 
@@ -973,6 +1057,8 @@ Several imperfect measurements can be more informative than one because their sh
 ***
 
 ## 28. Proxy assumptions
+
+**[Problem 2 — Real data and proxies](#a10-problem-map).** State the causal and measurement assumptions required for those proxies to be informative.
 
 The proxy model assumes:
 
@@ -1012,6 +1098,8 @@ A proxy model moves assumptions from “no confounding” to “correct measurem
 
 ## 29. Multiple proxies versus one proxy
 
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Explain what multiple indicators can add and why their number alone does not ensure identification.
+
 The residual $\epsilon_{ji}$ is proxy-specific measurement error with mean zero under the model. To recover the normal measurement model above one may write $\epsilon_{ji}\sim\mathrm{Normal}(0,\tau_j)$ and assume that these residuals are mutually independent conditional on $u_i$. This assumption is substantive: correlated residuals would otherwise be mistaken for evidence about the common factor.
 
 
@@ -1039,6 +1127,8 @@ But the quality of the result depends strongly on conditional independence and s
 
 ## 30. Measurement error and residual confounding
 
+**[Problem 2 — Real data and proxies](#a10-problem-map).** Show why treating an imperfect proxy as the confound itself can leave residual confounding.
+
 Using a noisy proxy directly as though it were the true confound can leave residual confounding.
 
 Suppose:
@@ -1060,6 +1150,8 @@ This is more coherent than replacing $U$ with a point estimate and treating it a
 ***
 
 ## 31. Omitted variables under nonlinear links
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Explain why omitted variables can change logistic coefficients even beyond familiar linear-regression intuition.
 
 Here $X$ and $U$ are two predictors, $\alpha$ is an intercept, and $\beta_X$ and $\beta_U$ are conditional log-odds coefficients. The symbols $\alpha^*$ and, more generally, $\beta_X^*$ would denote coefficients of a reduced model that omits $U$; a star marks a different estimand, not a known transformation of the original coefficients. The expectation $\mathbb E[p\mid X]$ averages the individual probability over the distribution of $U$ at a fixed $X$.
 
@@ -1090,6 +1182,8 @@ Sensitivity analysis should therefore focus on probability-scale estimands rathe
 
 ## 32. Non-collapsibility versus confounding
 
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Separate non-collapsibility of odds ratios from causal confounding.
+
 These phenomena should remain distinct.
 
 ### Confounding
@@ -1115,6 +1209,8 @@ computed for the same estimand and target population.
 ***
 
 ## 33. Sensitivity analysis and partial identification
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Describe what can be learned when the data and assumptions constrain a range of causal answers.
 
 When the sensitivity vectors $\boldsymbol b$ and $\boldsymbol g$ are not learned uniquely from the observed distribution, the causal effect is not point identified. Instead, the assumptions define a set of plausible effects.
 
@@ -1144,6 +1240,8 @@ The posterior therefore combines information from the observed data, structural 
 
 ## 34. Posterior predictive checks
 
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Check whether replicated outcomes resemble the observations, without treating fit as proof of causal identification.
+
 A posterior predictive check (PPC) simulates new observable outcomes conditional on posterior draws and compares chosen summaries with their observed counterparts. For posterior draw $s$ in the binary-department model, let $q_i^{(s)}$ and $p_i^{(s)}$ be the draw-specific department-2 and admission probabilities. Then simulate
 
 $$
@@ -1161,6 +1259,8 @@ A model that cannot reproduce the observed selection and outcome patterns is not
 ***
 
 ## 35. Prior predictive checks
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Check whether sensitivity priors generate plausible selection and admission patterns before fitting.
 
 A prior predictive check simulates every unknown parameter from its prior and then simulates observable data before conditioning on real outcomes. For the binary-department version, one simulated sequence is
 
@@ -1189,6 +1289,8 @@ Prior predictive checks are particularly important because sensitivity parameter
 ***
 
 ## 36. MCMC diagnostics for latent sensitivity models
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Assess whether MCMC reliably explores the posterior of the latent model.
 
 - **Bulk ESS** estimates how many independent draws would give comparable precision for central posterior summaries; **tail ESS** does the same for quantiles in the tails.
 - A **divergence** means the numerical Hamiltonian trajectory failed to represent part of the posterior geometry reliably.
@@ -1227,6 +1329,8 @@ The final estimand's diagnostic quality must also be assessed.
 
 ## 37. Computational identification warnings
 
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Recognize computational symptoms of weak identification before trusting summaries.
+
 Several symptoms suggest weak identification:
 
 - posterior sensitivity parameters resemble their priors;
@@ -1245,6 +1349,8 @@ The analysis should report this limitation rather than tuning it away.
 ***
 
 ## 38. Sensitivity to the sensitivity model
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Test alternative latent structures as well as alternative coefficient values.
 
 A robust sensitivity analysis should vary more than coefficient values.
 
@@ -1266,6 +1372,8 @@ It is to examine the scientifically plausible ways in which the baseline identif
 ***
 
 ## 39. Designing better data collection
+
+**[Problem 3 — Interpretation and checks](#a10-problem-map).** Use the assumptions that threaten the conclusion to prioritize new measurements or study designs.
 
 The numerical bounds below are illustrative log-odds coefficients per one latent standard deviation. Thus $b>0.3$ corresponds to an admission-odds multiplier above $\exp(0.3)\approx1.35$, while $g>0.2$ corresponds to a selection-odds multiplier above $\exp(0.2)\approx1.22$. A real study must replace these numbers with thresholds calibrated to its subject matter.
 
@@ -1299,6 +1407,8 @@ Sensitivity analysis is therefore a study-design tool, not merely a post hoc dis
 
 ## 40. CRM application: unobserved customer affinity
 
+**[Problem 4 — CRM decisions](#a10-problem-map).** Translate the admissions selection problem into customer affinity, offer assignment, and purchases.
+
 In this local analogy the symbols are reassigned explicitly:
 
 - $G_i$ is customer group or campaign-policy category;
@@ -1317,6 +1427,8 @@ with a causal offer effect $D\rightarrow Y$ and possibly a direct path $G\righta
 ***
 
 ## 41. CRM sensitivity model
+
+**[Problem 4 — CRM decisions](#a10-problem-map).** Model purchase and offer assignment jointly to represent hidden affinity explicitly.
 
 Let $p_i=\Pr(Y_i=1)$ be customer $i$'s purchase probability. A binary purchase model is
 
@@ -1345,6 +1457,8 @@ One component of each logit vector must be fixed as a reference, or an equivalen
 ***
 ## 42. CRM proxy measurements
 
+**[Problem 4 — CRM decisions](#a10-problem-map).** Identify pre-campaign affinity proxies and the assumptions needed to use them.
+
 Here $T_{ji}$ is pre-campaign proxy $j$ for customer $i$, $\lambda_j$ is its factor loading, and $\tau_j>0$ is its residual standard deviation. A loading gives the expected change in the proxy for one standard-deviation increase in affinity. Fixing $u_i\sim\mathrm{Normal}(0,1)$ anchors latent scale; a positive reference loading or another sign constraint anchors orientation.
 
 
@@ -1372,6 +1486,8 @@ A high-quality predictive score is not automatically a clean pre-treatment proxy
 ***
 
 ## 43. CRM tipping-point report
+
+**[Problem 4 — CRM decisions](#a10-problem-map).** Report when hidden-confounding assumptions change the campaign conclusion or profitability decision.
 
 Let $Y_i(1)$ and $Y_i(0)$ be customer $i$'s potential purchase outcomes under active campaign and comparison policy. The average treatment effect over the declared target customer population is
 
@@ -1407,6 +1523,8 @@ A small positive conversion effect can be economically negative after offer cost
 ***
 
 ## 44. Implications for CausalOps
+
+**[Operational bridge — CausalOps](#a10-problem-map).** Turn sensitivity assumptions, models, and robustness results into explicit reporting artifacts.
 
 A10 requires hidden-confounding assumptions to become explicit, versioned artifacts.
 
@@ -1493,6 +1611,8 @@ outputs:
 
 ## 45. CausalOps separation of evidence sources
 
+**[Operational bridge — CausalOps](#a10-problem-map).** Distinguish conclusions supported by observations from those supplied by structure or priors.
+
 The system should distinguish three layers.
 
 ### Data-identified quantities
@@ -1531,6 +1651,8 @@ This is necessary for auditable causal AI.
 ***
 
 ## 46. Common errors exposed by A10
+
+**[Consolidation](#a10-problem-map).** Revisit common failures across the admissions, proxy, and CRM problems.
 
 ### Error 1: Declaring no unobserved confounding without examining plausible paths
 
@@ -1592,6 +1714,8 @@ Sensitivity is conditional on the family of violations considered.
 
 ## 47. Lecture takeaways
 
+**[Consolidation](#a10-problem-map).** Collect the main lessons about identification, sensitivity, and decision robustness.
+
 1. Unobserved confounding should be modeled explicitly rather than silently assumed absent.
 2. Department can be both a mediator and a collider.
 3. Conditioning on department opens the path $G \rightarrow D \leftarrow U \rightarrow A$.
@@ -1620,6 +1744,8 @@ Sensitivity is conditional on the family of violations considered.
 ***
 
 ## 48. Review questions
+
+**[Consolidation](#a10-problem-map).** Check that you can explain the causal question, sensitivity assumptions, and practical conclusions.
 
 1. What causal path is opened by conditioning on department?
 2. Why can department be both a mediator and a collider?
@@ -1662,6 +1788,8 @@ Sensitivity is conditional on the family of violations considered.
 ***
 
 ## 49. Book reading guide
+
+**[Reading and code guide](#a10-problem-map).** Choose book sections that support the particular part of the sensitivity workflow you need to revisit.
 
 ### Official assigned reading
 
@@ -1719,6 +1847,8 @@ Chapter 12 contributes the broader mixture interpretation but is not an exact ma
 ***
 
 ## 50. Official code guide
+
+**[Reading and code guide](#a10-problem-map).** Connect the conceptual stages to the official simulation, real-data, and proxy code.
 
 ### `A10_sensitivity.R`
 
@@ -1781,6 +1911,8 @@ Those are assumptions to inspect, vary, and report.
 ***
 
 ## 51. Sources
+
+**[Sources](#a10-problem-map).** Locate the material supporting the chapter’s models and interpretation.
 
 - Richard McElreath, *Statistical Rethinking: A Bayesian Course with Examples in R and Stan*, second edition.
 - Official `stat_rethinking_2026` repository and A10 lecture listing.

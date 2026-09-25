@@ -34,3 +34,26 @@ close(coarse.alpha.mean,fine.alpha.mean,1e-3);
 close(coarse.beta.mean,fine.beta.mean,1e-3);
 close(coarse.beta.sd,fine.beta.sd,1e-3);
 console.log('PASS: prior recovery, symmetry, concentration, regularization, extremes, reproducibility, probability bounds, grid convergence.');
+// Section 10: individual Bernoulli data with a reproducible prefix.
+const seq20=sim.simulateSequential(-1,1,20,42);
+const seq200=sim.simulateSequential(-1,1,200,42);
+assert.deepEqual(seq200.slice(0,20),seq20);
+assert.notDeepEqual(seq20,sim.simulateSequential(-1,1,20,43));
+assert.ok(seq200.every(d=>d.x>=-2&&d.x<=2&&d.n===1&&(d.y===0||d.y===1)));
+const early=sim.regression(0,1,0,1,seq20);
+const late=sim.regression(0,1,0,1,seq200);
+assert.ok(late.alpha.sd<early.alpha.sd&&late.beta.sd<early.beta.sd);
+const seqFine=sim.regression(0,1,0,1,seq20,321);
+close(early.alpha.mean,seqFine.alpha.mean,1e-3);
+close(early.beta.mean,seqFine.beta.mean,1e-3);
+// Section 11: use exact odds/probability transformations, including negative changes.
+const c=sim.contrast(Math.log(.1/.9),Math.log(2),0,1);
+close(c.p0,.1);close(c.p1,2/11);close(c.oddsRatio,2);close(c.difference,2/11-.1);
+close(sim.contrast(0,Math.log(2),0,1).oddsRatio,c.oddsRatio);
+assert.notEqual(sim.contrast(0,Math.log(2),0,1).difference,c.difference);
+close(sim.contrast(-1,0,1,1).difference,0);
+close(sim.contrast(-1,1,1,0).difference,0);
+assert.ok(sim.contrast(-1,-1,0,1).difference<0);
+const reverse=sim.contrast(Math.log(.1/.9),Math.log(2),1,-1);
+close(reverse.oddsRatio,.5);close(reverse.difference,-c.difference);
+console.log('PASS: sequential prefix/reproducibility, posterior precision, grid convergence, and log-odds/probability interpretation.');

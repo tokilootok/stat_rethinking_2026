@@ -23,3 +23,8 @@
 .a09-simulator summary {cursor:pointer;font-weight:600;}
 @media(max-width:560px){.a09-simulator{padding:12px;}.a09-simulator .a09-controls{grid-template-columns:1fr;}}
 @media print{.a09-simulator input,.a09-simulator button{display:none;}}
+
+.a09-simulator .a09-group {border:1px solid #cbd5df;border-radius:8px;padding:12px 16px;margin:16px 0;}
+.a09-simulator .a09-group legend {float:none;width:auto;padding:0 8px;font-size:1rem;font-weight:650;}
+.a09-simulator .a09-pending {color:#80520b;}
+.a09-simulator button:disabled {opacity:.5;cursor:default;}

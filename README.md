@@ -96,6 +96,10 @@ There is a set of recorded lectures from 2023 that might also be of use, either 
 | 10 | 10 March | Beginner | <[Confounds & Sensitivity Analysis](https://www.youtube.com/watch?v=pwN0kdN3reY)> | Chapter 12 
 |    | 20 March | Experienced | <[Hidden Markov Models](https://www.youtube.com/watch?v=fuonUuKTOl4)> | Chapter 16
 
+## Supplementary study guide
+
+[A11 — Monsters and Mixtures](courses/A11.md) covers Chapter 12 of the second edition as an additional lesson, with [Quarto source](courses/A11.qmd), executable R examples, local interactive distributions, and review answers. It supplements the official ten-week schedule above.
+
 # Coding
 
 This course involves a lot of scripting. Students can engage with the material using either the original R code examples or one of several conversions to other computing environments. The conversions are not always exact, but they are rather complete. See list and links at (https://xcelab.net/rm/)
